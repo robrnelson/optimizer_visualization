@@ -342,6 +342,8 @@
 
         // Convergence Tracking
         const TOL = 1e-4; 
+        const TOL_NM = 1e-7; 
+
         let done_gd = false, done_gn = false, done_nw = false, done_lm = false, done_nm = false;
         let conv_gd = iters, conv_gn = iters, conv_nw = iters, conv_lm = iters, conv_nm = iters;
 
@@ -436,7 +438,7 @@
                 }
                 nm_simplex.sort((a, b) => getCost(a) - getCost(b));
                 let p_next = nm_simplex[0];
-                if (getDistance(p_nm, p_next) < TOL) { done_nm = true; conv_nm = i + 1; }
+                if (getDistance(p_nm, p_next) < TOL_NM) { done_nm = true; conv_nm = i + 1; }
                 p_nm = p_next;
             }
             path_nm.push(p_nm);
