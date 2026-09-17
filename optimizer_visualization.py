@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Page configuration to match watermarked_img_10714072139092281361.jpg
+# Page configuration
 st.set_page_config(page_title="Streamlit Optimization Method Explorer", layout="wide")
 
 st.title("Streamlit Optimization Method Explorer")
@@ -132,24 +132,21 @@ steps_Newton = np.array(steps_Newton)
 steps_LM = np.array(steps_LM)
 
 # --- Plotting ---
-if st.button("Update Visualization"):
-    pass # Streamlit natively reruns on state change, but this matches the UI button
-
 fig, ax = plt.subplots(figsize=(10, 6))
 
 if show_gd:
-    ax.plot(steps_GD[:, 0], steps_GD[:, 1], 'k-', label="Gradient Descent", linewidth=1.5, alpha=0.8)
+    ax.plot(steps_GD[:, 0], steps_GD[:, 1], 'm-', label="Gradient Descent", linewidth=1.5, alpha=0.8)
 if show_nw:
-    ax.plot(steps_Newton[:, 0], steps_Newton[:, 1], 'k--o', label="Newton's Method", linewidth=1.5)
+    ax.plot(steps_Newton[:, 0], steps_Newton[:, 1], 'g--o', label="Newton's Method", linewidth=1.5)
 if show_gn:
-    ax.plot(steps_GN[:, 0], steps_GN[:, 1], 'k-^', label="Gauss-Newton", linewidth=1.5)
+    ax.plot(steps_GN[:, 0], steps_GN[:, 1], 'b-^', label="Gauss-Newton", linewidth=1.5)
 if show_lm:
-    ax.plot(steps_LM[:, 0], steps_LM[:, 1], 'k-v', label="dynamic Levenberg-Marquardt", linewidth=1.5)
+    ax.plot(steps_LM[:, 0], steps_LM[:, 1], color='darkorange', marker='v', linestyle='-', label="dynamic Levenberg-Marquardt", linewidth=1.5)
 
 # True minimum indicator
 ax.plot(true_a, true_b, 'r*', markersize=10, label="True Minimum")
 
-# Styling to match watermarked_img_10714072139092281361.jpg
+# Styling
 ax.grid(True, linestyle='-', color='0.8')
 ax.set_xlim(-2.5, 4.5)
 ax.set_ylim(-2.5, 4.5)
