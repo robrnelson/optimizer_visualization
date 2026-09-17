@@ -15,10 +15,11 @@
         .main-content { flex: 1; min-width: 0; }
         
         .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 20px 0 0 0; font-weight: bold; font-size: 1em; }
-        .metric-block { display: flex; flex-direction: column; align-items: center; }
-        .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+        .metric-block { display: flex; flex-direction: column; align-items: center; width: 18%; }
+        .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 2px; text-align: center; }
         .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); margin-bottom: 2px; }
         .metric-chi { font-size: 0.75em; color: #888; font-weight: 500; }
+        .metric-iters { font-size: 0.8em; color: #444; font-weight: 600; margin-top: 4px; background: #eee; padding: 2px 8px; border-radius: 12px; }
         
         .control-group { display: flex; flex-direction: column; }
         label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
@@ -32,6 +33,7 @@
         @media (max-width: 850px) {
             .layout { flex-direction: column; }
             .sidebar { flex: auto; width: 100%; }
+            .metric-block { width: 45%; margin-bottom: 15px; }
         }
     </style>
 </head>
@@ -92,32 +94,51 @@
                     <div class="metric-label">Initial Cost</div>
                     <div class="metric-value" id="val-initcost" style="color: black;">0.00</div>
                     <div class="metric-chi" id="chi-init">(χ²_ν: 0.00)</div>
+                    <div class="metric-iters" style="opacity: 0;">-</div> <!-- Spacer -->
                 </div>
                 <div class="metric-block">
                     <div class="metric-label">GD Cost</div>
                     <div class="metric-value" id="val-gdcost" style="color: #FF00FF;">0.00</div>
                     <div class="metric-chi" id="chi-gd">(χ²_ν: 0.00)</div>
+                    <div class="metric-iters" id="iter-gd">Iters: -</div>
                 </div>
                 <div class="metric-block">
                     <div class="metric-label">Newton Cost</div>
                     <div class="metric-value" id="val-nwcost" style="color: #FFA500;">0.00</div>
                     <div class="metric-chi" id="chi-nw">(χ²_ν: 0.00)</div>
+                    <div class="metric-iters" id="iter-nw">Iters: -</div>
                 </div>
                 <div class="metric-block">
                     <div class="metric-label">GN Cost</div>
                     <div class="metric-value" id="val-gncost" style="color: #FF0000;">0.00</div>
                     <div class="metric-chi" id="chi-gn">(χ²_ν: 0.00)</div>
+                    <div class="metric-iters" id="iter-gn">Iters: -</div>
                 </div>
                 <div class="metric-block">
                     <div class="metric-label">LM Cost</div>
                     <div class="metric-value" id="val-lmcost" style="color: #008B8B;">0.00</div>
                     <div class="metric-chi" id="chi-lm">(χ²_ν: 0.00)</div>
+                    <div class="metric-iters" id="iter-lm">Iters: -</div>
                 </div>
             </div>
         </div>
     </div>
 
 <script>
+    // --- UTILITIES ---
+    // Smart formatter: uses standard decimals unless numbers are huge or tiny to prevent text overflow
+    function formatNum(val) {
+        if (!isFinite(val)) return "NaN";
+        if (val === 0) return "0.00";
+        if (Math.abs(val) >= 10000 || Math.abs(val) < 0.01) return val.toExponential(2);
+        return val.toFixed(2);
+    }
+    
+    // Calculates distance between two points to check for convergence
+    function getDistance(p1, p2) {
+        return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
+    }
+
     // --- MATH HELPERS FOR 2x2 MATRICES ---
     function invert2x2(A) {
         let det = A[0][0]*A[1][1] - A[0][1]*A[1][0];
@@ -151,10 +172,9 @@
 
     function initDataset() {
         currentDataset = document.getElementById('dataset').value;
-        const num_points = 100; // Increased sample size to 100
+        const num_points = 100; 
         let seed = 42; 
         
-        // Deterministic Box-Muller transform for true Gaussian noise
         function getNoise(sigma) {
             let u1 = 0, u2 = 0;
             while(u1 === 0) {
@@ -290,46 +310,68 @@
         let path_gd = [p_gd], path_gn = [p_gn], path_nw = [p_nw], path_lm = [p_lm];
         let cur_lambda = init_lambda;
 
+        // Convergence Tracking
+        const TOL = 1e-4; // If the step size is smaller than this, it has essentially stopped moving
+        let done_gd = false, done_gn = false, done_nw = false, done_lm = false;
+        let conv_gd = iters, conv_gn = iters, conv_nw = iters, conv_lm = iters;
+
         for(let i=0; i<iters; i++) {
-            // GD
-            let J_gd = getJacobian(p_gd), r_gd = getResiduals(p_gd);
-            let grad_gd = JT_res(J_gd, r_gd);
-            p_gd = [p_gd[0] - lr*grad_gd[0], p_gd[1] - lr*grad_gd[1]];
+            // Gradient Descent
+            if (!done_gd) {
+                let J_gd = getJacobian(p_gd), r_gd = getResiduals(p_gd);
+                let grad_gd = JT_res(J_gd, r_gd);
+                let p_next = [p_gd[0] - lr*grad_gd[0], p_gd[1] - lr*grad_gd[1]];
+                if (getDistance(p_gd, p_next) < TOL) { done_gd = true; conv_gd = i + 1; }
+                p_gd = p_next;
+            }
             path_gd.push(p_gd);
 
-            // GN
-            try {
-                let J_gn = getJacobian(p_gn), r_gn = getResiduals(p_gn);
-                let step_gn = mul2x2Vec(invert2x2(JTJ(J_gn)), JT_res(J_gn, r_gn));
-                p_gn = [p_gn[0] - step_gn[0], p_gn[1] - step_gn[1]];
-            } catch(e) {}
+            // Gauss-Newton
+            if (!done_gn) {
+                try {
+                    let J_gn = getJacobian(p_gn), r_gn = getResiduals(p_gn);
+                    let step_gn = mul2x2Vec(invert2x2(JTJ(J_gn)), JT_res(J_gn, r_gn));
+                    let p_next = [p_gn[0] - step_gn[0], p_gn[1] - step_gn[1]];
+                    if (getDistance(p_gn, p_next) < TOL) { done_gn = true; conv_gn = i + 1; }
+                    p_gn = p_next;
+                } catch(e) { done_gn = true; conv_gn = "Failed"; }
+            }
             path_gn.push(p_gn);
 
             // Newton
-            try {
-                let J_nw = getJacobian(p_nw), r_nw = getResiduals(p_nw);
-                let step_nw = mul2x2Vec(invert2x2(getExactHessian(p_nw)), JT_res(J_nw, r_nw));
-                p_nw = [p_nw[0] - step_nw[0], p_nw[1] - step_nw[1]];
-            } catch(e) {}
+            if (!done_nw) {
+                try {
+                    let J_nw = getJacobian(p_nw), r_nw = getResiduals(p_nw);
+                    let step_nw = mul2x2Vec(invert2x2(getExactHessian(p_nw)), JT_res(J_nw, r_nw));
+                    let p_next = [p_nw[0] - step_nw[0], p_nw[1] - step_nw[1]];
+                    if (getDistance(p_nw, p_next) < TOL) { done_nw = true; conv_nw = i + 1; }
+                    p_nw = p_next;
+                } catch(e) { done_nw = true; conv_nw = "Failed"; }
+            }
             path_nw.push(p_nw);
 
-            // LM
-            let J_lm = getJacobian(p_lm), r_lm = getResiduals(p_lm);
-            let cost_lm = getCost(p_lm);
-            let H_lm = JTJ(J_lm);
-            H_lm[0][0] += cur_lambda * H_lm[0][0];
-            H_lm[1][1] += cur_lambda * H_lm[1][1];
-            
-            try {
-                let step_lm = mul2x2Vec(invert2x2(H_lm), JT_res(J_lm, r_lm));
-                let p_try = [p_lm[0] - step_lm[0], p_lm[1] - step_lm[1]];
-                if(getCost(p_try) < cost_lm) {
-                    p_lm = p_try;
-                    cur_lambda /= 10.0;
-                } else {
-                    cur_lambda *= 10.0;
-                }
-            } catch(e) { cur_lambda *= 10.0; }
+            // Levenberg-Marquardt
+            if (!done_lm) {
+                let J_lm = getJacobian(p_lm), r_lm = getResiduals(p_lm);
+                let cost_lm = getCost(p_lm);
+                let H_lm = JTJ(J_lm);
+                H_lm[0][0] += cur_lambda * H_lm[0][0];
+                H_lm[1][1] += cur_lambda * H_lm[1][1];
+                
+                try {
+                    let step_lm = mul2x2Vec(invert2x2(H_lm), JT_res(J_lm, r_lm));
+                    let p_try = [p_lm[0] - step_lm[0], p_lm[1] - step_lm[1]];
+                    
+                    if (getDistance(p_lm, p_try) < TOL) { done_lm = true; conv_lm = i + 1; }
+                    
+                    if(getCost(p_try) < cost_lm) {
+                        p_lm = p_try;
+                        cur_lambda /= 10.0;
+                    } else {
+                        cur_lambda *= 10.0;
+                    }
+                } catch(e) { cur_lambda *= 10.0; }
+            }
             path_lm.push(p_lm);
         }
 
@@ -340,17 +382,24 @@
         let cost_gn = getCost(p_gn);
         let cost_lm = getCost(p_lm);
 
-        document.getElementById('val-initcost').innerText = cost_init.toExponential(2);
-        document.getElementById('val-gdcost').innerText = cost_gd.toExponential(2);
-        document.getElementById('val-nwcost').innerText = cost_nw.toExponential(2);
-        document.getElementById('val-gncost').innerText = cost_gn.toExponential(2);
-        document.getElementById('val-lmcost').innerText = cost_lm.toExponential(2);
+        // Apply Smart Formatting
+        document.getElementById('val-initcost').innerText = formatNum(cost_init);
+        document.getElementById('val-gdcost').innerText = formatNum(cost_gd);
+        document.getElementById('val-nwcost').innerText = formatNum(cost_nw);
+        document.getElementById('val-gncost').innerText = formatNum(cost_gn);
+        document.getElementById('val-lmcost').innerText = formatNum(cost_lm);
 
-        document.getElementById('chi-init').innerText = `(χ²_ν: ${getReducedChiSq(cost_init).toExponential(2)})`;
-        document.getElementById('chi-gd').innerText = `(χ²_ν: ${getReducedChiSq(cost_gd).toFixed(2)})`;
-        document.getElementById('chi-nw').innerText = `(χ²_ν: ${getReducedChiSq(cost_nw).toFixed(2)})`;
-        document.getElementById('chi-gn').innerText = `(χ²_ν: ${getReducedChiSq(cost_gn).toFixed(2)})`;
-        document.getElementById('chi-lm').innerText = `(χ²_ν: ${getReducedChiSq(cost_lm).toFixed(2)})`;
+        document.getElementById('chi-init').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_init))})`;
+        document.getElementById('chi-gd').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_gd))})`;
+        document.getElementById('chi-nw').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_nw))})`;
+        document.getElementById('chi-gn').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_gn))})`;
+        document.getElementById('chi-lm').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_lm))})`;
+
+        // Update Convergence Texts
+        document.getElementById('iter-gd').innerText = done_gd ? `Iters: ${conv_gd}` : `Iters: ${iters}+`;
+        document.getElementById('iter-nw').innerText = (done_nw && conv_nw !== "Failed") ? `Iters: ${conv_nw}` : (conv_nw === "Failed" ? "Failed" : `Iters: ${iters}+`);
+        document.getElementById('iter-gn').innerText = (done_gn && conv_gn !== "Failed") ? `Iters: ${conv_gn}` : (conv_gn === "Failed" ? "Failed" : `Iters: ${iters}+`);
+        document.getElementById('iter-lm').innerText = done_lm ? `Iters: ${conv_lm}` : `Iters: ${iters}+`;
 
         // 6. BUILD TRACES
         let traces = [];
