@@ -10,14 +10,15 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; color: #333; }
         h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; text-align: center; margin-bottom: 30px; }
         
-        /* New Layout Styles */
         .layout { display: flex; gap: 30px; align-items: flex-start; }
         .sidebar { flex: 0 0 320px; background: #f8f9fa; padding: 20px; border-radius: 8px; box-sizing: border-box; }
-        .main-content { flex: 1; min-width: 0; } /* min-width: 0 prevents flex child from overflowing */
+        .main-content { flex: 1; min-width: 0; }
         
-        .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 0 0 20px 0; font-weight: bold; font-size: 1em; }
-        .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-        .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); }
+        .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 20px 0 0 0; font-weight: bold; font-size: 1em; }
+        .metric-block { display: flex; flex-direction: column; align-items: center; }
+        .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+        .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); margin-bottom: 2px; }
+        .metric-chi { font-size: 0.75em; color: #888; font-weight: 500; }
         
         .control-group { display: flex; flex-direction: column; }
         label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
@@ -28,7 +29,6 @@
         
         hr { border: 0; border-top: 1px solid #e1e4e8; margin: 20px 0; }
 
-        /* Responsive stacking for smaller screens */
         @media (max-width: 850px) {
             .layout { flex-direction: column; }
             .sidebar { flex: auto; width: 100%; }
@@ -85,30 +85,35 @@
 
         <!-- RIGHT MAIN CONTENT -->
         <div class="main-content">
+            <div id="plot"></div>
+
             <div class="metrics-container">
-                <div style="text-align: center;">
+                <div class="metric-block">
                     <div class="metric-label">Initial Cost</div>
                     <div class="metric-value" id="val-initcost" style="color: black;">0.00</div>
+                    <div class="metric-chi" id="chi-init">(χ²_ν: 0.00)</div>
                 </div>
-                <div style="text-align: center;">
+                <div class="metric-block">
                     <div class="metric-label">GD Cost</div>
                     <div class="metric-value" id="val-gdcost" style="color: #FF00FF;">0.00</div>
+                    <div class="metric-chi" id="chi-gd">(χ²_ν: 0.00)</div>
                 </div>
-                <div style="text-align: center;">
+                <div class="metric-block">
                     <div class="metric-label">Newton Cost</div>
                     <div class="metric-value" id="val-nwcost" style="color: #FFA500;">0.00</div>
+                    <div class="metric-chi" id="chi-nw">(χ²_ν: 0.00)</div>
                 </div>
-                <div style="text-align: center;">
+                <div class="metric-block">
                     <div class="metric-label">GN Cost</div>
                     <div class="metric-value" id="val-gncost" style="color: #FF0000;">0.00</div>
+                    <div class="metric-chi" id="chi-gn">(χ²_ν: 0.00)</div>
                 </div>
-                <div style="text-align: center;">
+                <div class="metric-block">
                     <div class="metric-label">LM Cost</div>
                     <div class="metric-value" id="val-lmcost" style="color: #008B8B;">0.00</div>
+                    <div class="metric-chi" id="chi-lm">(χ²_ν: 0.00)</div>
                 </div>
             </div>
-            
-            <div id="plot"></div>
         </div>
     </div>
 
@@ -140,6 +145,10 @@
     let y_data = [];
     let true_a = 2.0;
     let true_b = 1.5;
+    
+    // Statistical properties for Reduced Chi-Squared (χ²_v) calculation
+    let noise_sigma = 0.1;
+    let degrees_of_freedom = 1;
 
     function initDataset() {
         currentDataset = document.getElementById('dataset').value;
@@ -148,12 +157,15 @@
             x_data = Array.from({length: 10}, (_, i) => i / 9.0);
             const noise = [0.0496714, -0.0138264, 0.0647688, 0.1523029, -0.0234153, -0.0234136, 0.1579212, 0.0767434, -0.0469474, 0.054256];
             y_data = x_data.map((x, i) => true_a * Math.exp(true_b * x) + noise[i]);
+            noise_sigma = 0.10; // Theoretical sigma of the normal distribution
+            degrees_of_freedom = x_data.length - 2; // N - 2 parameters
         } else {
-            // Sine wave dataset (Generates repeating local minima)
             true_a = 3.0; true_b = 1.0;
             x_data = Array.from({length: 20}, (_, i) => i / 19.0 * 4.0);
             const noise = [0.02, -0.05, 0.03, -0.01, 0.04, -0.02, 0.01, -0.03, 0.05, -0.04, 0.02, -0.05, 0.03, -0.01, 0.04, -0.02, 0.01, -0.03, 0.05, -0.04];
             y_data = x_data.map((x, i) => Math.sin(true_a * x + true_b) + noise[i]);
+            noise_sigma = 0.033; // Approx standard deviation of the custom sine noise
+            degrees_of_freedom = x_data.length - 2;
         }
     }
     initDataset();
@@ -165,7 +177,14 @@
             return x_data.map((x, i) => Math.sin(p[0] * x + p[1]) - y_data[i]);
         }
     }
+    
     function getCost(p) { return 0.5 * getResiduals(p).reduce((sum, r) => sum + r*r, 0); }
+    
+    // Calculates Reduced Chi-Squared: (Sum of Squared Residuals) / (DOF * Variance)
+    // Since Cost = 0.5 * SSR, SSR = 2 * Cost.
+    function getReducedChiSq(cost) {
+        return (2.0 * cost) / (degrees_of_freedom * noise_sigma * noise_sigma);
+    }
     
     function getJacobian(p) {
         if (currentDataset === 'exp') {
@@ -212,7 +231,6 @@
 
         let plotDiv = document.getElementById('plot');
         
-        // 1. DYNAMICALLY READ CURRENT ZOOM/PAN BOUNDS AND DRAG MODE
         let currentXRange = [-5, 5];
         let currentYRange = [-5, 5];
         let currentDragMode = 'zoom';
@@ -228,7 +246,6 @@
         }
         forceReset = false;
 
-        // 2. GENERATE CONTOUR GRID TO FILL THE EXACT VIEWPORT
         const grid_size = 80;
         const x_min = currentXRange[0];
         const x_max = currentXRange[1];
@@ -243,13 +260,12 @@
             let row = [];
             for(let a of a_range) {
                 let cost = getCost([a, b]);
-                if(!isFinite(cost)) cost = 1e10; // Prevent overflow breaks
+                if(!isFinite(cost)) cost = 1e10; 
                 row.push(Math.log10(cost + 1e-6));
             }
             Z.push(row);
         }
 
-        // 3. READ SLIDERS
         let sx = parseFloat(document.getElementById('startx').value);
         let sy = parseFloat(document.getElementById('starty').value);
         let iters = parseInt(document.getElementById('iter').value);
@@ -262,7 +278,6 @@
         document.getElementById('val-initlambda').innerText = init_lambda.toFixed(2);
         document.getElementById('val-lr').innerText = lr.toFixed(3);
 
-        // 4. RUN OPTIMIZATION ALGORITHMS
         let p_gd = [sx, sy], p_gn = [sx, sy], p_nw = [sx, sy], p_lm = [sx, sy];
         let path_gd = [p_gd], path_gn = [p_gn], path_nw = [p_nw], path_lm = [p_lm];
         let cur_lambda = init_lambda;
@@ -310,12 +325,24 @@
             path_lm.push(p_lm);
         }
 
-        // 5. UPDATE METRICS UI
-        document.getElementById('val-initcost').innerText = getCost([sx, sy]).toExponential(2);
-        document.getElementById('val-gdcost').innerText = getCost(p_gd).toExponential(2);
-        document.getElementById('val-nwcost').innerText = getCost(p_nw).toExponential(2);
-        document.getElementById('val-gncost').innerText = getCost(p_gn).toExponential(2);
-        document.getElementById('val-lmcost').innerText = getCost(p_lm).toExponential(2);
+        // 5. UPDATE METRICS UI (Including Chi-Squared)
+        let cost_init = getCost([sx, sy]);
+        let cost_gd = getCost(p_gd);
+        let cost_nw = getCost(p_nw);
+        let cost_gn = getCost(p_gn);
+        let cost_lm = getCost(p_lm);
+
+        document.getElementById('val-initcost').innerText = cost_init.toExponential(2);
+        document.getElementById('val-gdcost').innerText = cost_gd.toExponential(2);
+        document.getElementById('val-nwcost').innerText = cost_nw.toExponential(2);
+        document.getElementById('val-gncost').innerText = cost_gn.toExponential(2);
+        document.getElementById('val-lmcost').innerText = cost_lm.toExponential(2);
+
+        document.getElementById('chi-init').innerText = `(χ²_ν: ${getReducedChiSq(cost_init).toExponential(2)})`;
+        document.getElementById('chi-gd').innerText = `(χ²_ν: ${getReducedChiSq(cost_gd).toFixed(2)})`;
+        document.getElementById('chi-nw').innerText = `(χ²_ν: ${getReducedChiSq(cost_nw).toFixed(2)})`;
+        document.getElementById('chi-gn').innerText = `(χ²_ν: ${getReducedChiSq(cost_gn).toFixed(2)})`;
+        document.getElementById('chi-lm').innerText = `(χ²_ν: ${getReducedChiSq(cost_lm).toFixed(2)})`;
 
         // 6. BUILD TRACES
         let traces = [];
@@ -330,14 +357,12 @@
         if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#FF0000', dash: 'dash', width: 2}});
         if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#00E5FF', width: 2}});
         
-        // True Min
         traces.push({
             x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
             showlegend: true, hoverinfo: 'skip', 
             marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}
         });
 
-        // Starting Point
         traces.push({
             x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', 
             marker: {color: 'black', size: 10, line: {color: 'white', width: 1}}, 
@@ -359,30 +384,22 @@
         });
     }
 
-    // Handle dataset change
     document.getElementById('dataset').addEventListener('change', function() {
         initDataset();
         forceReset = true; 
         updatePlot();
     });
 
-    // Attach listeners to update when you move the sliders or toggles
     document.querySelectorAll('input').forEach(el => el.addEventListener('input', updatePlot));
     
-    // Initial draw
     updatePlot();
 
-    // DEBOUNCED RELAYOUT LISTENER
     let relayoutTimer;
     document.getElementById('plot').on('plotly_relayout', function(eventData) {
         if (isProgrammaticUpdate) return;
-        
         if (eventData.dragmode && Object.keys(eventData).length === 1) return;
-        
         clearTimeout(relayoutTimer);
-        relayoutTimer = setTimeout(() => {
-            updatePlot();
-        }, 400);
+        relayoutTimer = setTimeout(() => { updatePlot(); }, 400);
     });
 </script>
 </body>
