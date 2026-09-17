@@ -2,33 +2,32 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 
-# Page configuration
-st.set_page_config(page_title="Streamlit Optimization Method Explorer", layout="wide")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="LM Algorithm Optimizer", layout="centered")
 
-st.title("Streamlit Optimization Method Explorer")
-st.header("Optimizer Path Comparison")
-st.markdown("""
-* Non-linear data fitting problem: $y = 2.0 e^{1.5x}$
-* Synthetic noisy data generated for demonstration.
-* **Scroll to zoom, drag to pan.**
-""")
+st.title("LM Algorithm Optimizer")
 
-# --- Sidebar Controls ---
-st.sidebar.header("Settings")
-start_x = st.sidebar.slider("Starting point X", min_value=-2.0, max_value=4.0, value=2.0, step=0.1)
-start_y = st.sidebar.slider("Y coordinate: Y", min_value=-2.0, max_value=4.0, value=1.0, step=0.1)
-max_iter = st.sidebar.slider("Iteration step (max iterations)", min_value=0, max_value=20, value=20, step=1)
+# We create layout containers to force the visual order (Plot -> Metrics -> Controls)
+# while allowing the script to calculate data top-to-bottom.
+plot_container = st.container()
+metrics_container = st.container()
+st.write("") # Spacer
 
-st.sidebar.markdown("Which optimization paths are:")
-show_gd = st.sidebar.checkbox("Gradient Descent", value=True)
-show_nw = st.sidebar.checkbox("Newton's Method", value=True)
-show_gn = st.sidebar.checkbox("Gauss-Newton", value=True)
-show_lm = st.sidebar.checkbox("dynamic Levenberg-Marquardt", value=False)
+# --- CONTROLS (Rendered at the bottom) ---
+start_x = st.slider("Start X", min_value=-5.0, max_value=5.0, value=-2.0, step=0.1)
+start_y = st.slider("Start Y", min_value=-5.0, max_value=5.0, value=-2.4, step=0.1)
+current_iter = st.slider("Iteration Step", min_value=0, max_value=20, value=20, step=1)
+initial_lambda = st.slider("Initial LM Lambda", min_value=0.001, max_value=10.0, value=1.0, step=0.1)
+learning_rate = st.slider("GD Learning Rate", min_value=0.001, max_value=0.2, value=0.05, step=0.001)
 
-initial_lambda = st.sidebar.slider("Initial Levenberg-Marquardt damping", min_value=0.0, max_value=10.0, value=3.0, step=0.1)
-learning_rate = st.sidebar.slider("Gradient Descent learning rate", min_value=0.001, max_value=0.2, value=0.05, step=0.001)
+st.write("---")
 
-# --- Math & Data ---
+show_nw = st.toggle("Show Newton", value=True)
+show_gn = st.toggle("Show Gauss-Newton", value=True)
+show_lm = st.toggle("Show Levenberg-Marquardt", value=True)
+show_gd = st.toggle("Show Gradient Descent", value=False)
+
+# --- MATH & DATA ---
 np.random.seed(42)
 x_data = np.linspace(0, 1, 10)
 true_a, true_b = 2.0, 1.5
@@ -63,8 +62,9 @@ def exact_hessian(p):
 def get_cost(p):
     return 0.5 * np.sum(residuals(p)**2)
 
-# --- Optimizers ---
+# --- OPTIMIZERS ---
 p_init = np.array([start_x, start_y])
+max_iter = current_iter  # Only calculate up to the selected slider step
 
 # 1. Gradient Descent
 steps_GD = [p_init.copy()]
@@ -100,6 +100,7 @@ for _ in range(max_iter):
 
 # 4. Dynamic Levenberg-Marquardt
 lambda_param = initial_lambda
+lambda_history = [lambda_param]
 steps_LM = [p_init.copy()]
 p = p_init.copy()
 
@@ -125,16 +126,17 @@ for _ in range(max_iter):
         lambda_param *= 10.0
         
     steps_LM.append(p.copy())
+    lambda_history.append(lambda_param)
 
 steps_GD = np.array(steps_GD)
 steps_GN = np.array(steps_GN)
 steps_Newton = np.array(steps_Newton)
 steps_LM = np.array(steps_LM)
 
-# --- Calculate Contour Grid ---
-# Removed logarithmic scaling, now using raw linear cost values
-a_range = np.linspace(-2.5, 4.5, 60)
-b_range = np.linspace(-2.5, 4.5, 60)
+# --- CALCULATE CONTOUR ---
+# Expanded view bounds to match the -5 to 5 scale in the reference image
+a_range = np.linspace(-5, 5, 80)
+b_range = np.linspace(-5, 5, 80)
 A, B = np.meshgrid(a_range, b_range)
 Z = np.zeros_like(A)
 
@@ -142,18 +144,19 @@ for i in range(A.shape[0]):
     for j in range(A.shape[1]):
         Z[i, j] = get_cost([A[i, j], B[i, j]])
 
-# --- Plotting with Plotly ---
+# --- BUILD PLOTLY CHART ---
 fig = go.Figure()
 
-# Add Contour surface
+# Add wireframe-style Contour surface
 fig.add_trace(go.Contour(
     x=a_range, y=b_range, z=Z,
-    colorscale='Viridis',
-    opacity=0.4,
+    contours_coloring='lines', # Replaces solid fill with clean lines
+    line_width=1,
+    colorscale='Greys',
+    opacity=0.3,
     showscale=False,
-    hoverinfo='skip',
-    # Optional: You can uncomment the line below if you want Plotly to draw more contour lines dynamically
-    # ncontours=30 
+    ncontours=45,
+    hoverinfo='skip'
 ))
 
 # Add Optimizer Paths
@@ -161,54 +164,62 @@ if show_gd:
     fig.add_trace(go.Scatter(
         x=steps_GD[:, 0], y=steps_GD[:, 1],
         mode='lines+markers', name="Gradient Descent",
-        line=dict(color='magenta', width=2),
-        marker=dict(symbol='square', size=6)
+        line=dict(color='#E324B3', width=2, dash='dot'),
+        marker=dict(size=6)
     ))
 
 if show_nw:
     fig.add_trace(go.Scatter(
         x=steps_Newton[:, 0], y=steps_Newton[:, 1],
-        mode='lines+markers', name="Newton's Method",
-        line=dict(color='green', width=2, dash='dash'),
-        marker=dict(symbol='circle', size=6)
+        mode='lines+markers', name="Newton",
+        line=dict(color='#F2A93B', width=2),
+        marker=dict(size=6)
     ))
 
 if show_gn:
     fig.add_trace(go.Scatter(
         x=steps_GN[:, 0], y=steps_GN[:, 1],
         mode='lines+markers', name="Gauss-Newton",
-        line=dict(color='blue', width=2),
-        marker=dict(symbol='triangle-up', size=7)
+        line=dict(color='#32A852', width=2, dash='dash'),
+        marker=dict(size=6)
     ))
 
 if show_lm:
     fig.add_trace(go.Scatter(
         x=steps_LM[:, 0], y=steps_LM[:, 1],
-        mode='lines+markers', name="dynamic Levenberg-Marquardt",
-        line=dict(color='darkorange', width=2),
-        marker=dict(symbol='triangle-down', size=7)
+        mode='lines+markers', name="Levenberg-Marquardt",
+        line=dict(color='#4B93FF', width=2),
+        marker=dict(size=6)
     ))
 
 # Add True Minimum
 fig.add_trace(go.Scatter(
     x=[true_a], y=[true_b],
     mode='markers', name="True Minimum",
-    marker=dict(color='red', symbol='star', size=12)
+    showlegend=False,
+    marker=dict(color='white', line=dict(color='#32A852', width=2), symbol='circle-dot', size=12)
 ))
 
-# Style and adjust height
+# Styling matching the image
 fig.update_layout(
-    height=550,  
-    xaxis_title="Parameter a",
-    yaxis_title="Parameter b",
-    xaxis=dict(range=[-2.5, 4.5], zeroline=False),
-    yaxis=dict(range=[-2.5, 4.5], zeroline=False),
+    height=500,  
+    xaxis_title="X Position →",
+    yaxis_title="Y Position ↑",
+    xaxis=dict(range=[-5, 5], zeroline=False, gridcolor='rgba(200,200,200,0.2)'),
+    yaxis=dict(range=[-5, 5], zeroline=False, gridcolor='rgba(200,200,200,0.2)'),
+    plot_bgcolor='white',
     legend=dict(
-        yanchor="top", y=0.99,
-        xanchor="left", x=0.01,
-        bgcolor="rgba(255, 255, 255, 0.8)"
+        orientation="h",
+        yanchor="bottom", y=-0.2,
+        xanchor="left", x=0
     ),
-    margin=dict(l=20, r=20, t=30, b=20)
+    margin=dict(l=0, r=0, t=10, b=0)
 )
 
-st.plotly_chart(fig, use_container_width=True)
+# Render Plot in the top container
+plot_container.plotly_chart(fig, use_container_width=True)
+
+# Render Metrics in the middle container
+col1, col2 = metrics_container.columns(2)
+col1.metric("CURRENT LAMBDA", f"{lambda_history[-1]:.2e}")
+col2.metric("COST FUNCTION", f"{get_cost(steps_LM[-1]):.2f}")
