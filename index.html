@@ -47,8 +47,9 @@
             <div class="control-group">
                 <label>View Mode:</label>
                 <select id="viewmode" style="font-size: 14px; border-radius: 4px; padding: 6px; background-color: #e9ecef;">
-                    <option value="2d">2D Contour Plot</option>
-                    <option value="3d" selected>3D Surface Plot</option>
+                    <!-- Default changed to 2D Contour Plot -->
+                    <option value="2d" selected>2D Contour Plot</option>
+                    <option value="3d">3D Surface Plot</option>
                 </select>
             </div>
 
@@ -474,7 +475,7 @@
         let layout = {
             height: 650, margin: {l: 40, r: 20, t: 20, b: 40},
             legend: {orientation: 'h', y: -0.15}, plot_bgcolor: 'white',
-            uirevision: currentDataset + currentView // preserves zooming/panning/camera!
+            uirevision: currentDataset + currentView 
         };
 
         if (currentView === '3d') {
