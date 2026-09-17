@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cost Function Solver Visualization</title>
+    <title>Cost Function Solver Visualization<</title>
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -23,14 +23,14 @@
 </head>
 <body>
 
-    <h1>Cost Function Solver Visualization</h1>
+    <h1>Cost Function Solver Visualization<</h1>
     
     <div id="plot"></div>
     
     <div class="metrics-container">
         <div style="text-align: center;">
-            <div class="metric-label">Current LM Lambda</div>
-            <div class="metric-value" id="val-lambda">1.00e+0</div>
+            <div class="metric-label">Initial Cost</div>
+            <div class="metric-value" id="val-initcost">0.00</div>
         </div>
         <div style="text-align: center;">
             <div class="metric-label">Current LM Cost</div>
@@ -40,11 +40,11 @@
 
     <div class="controls-grid">
         <div class="control-group">
-            <label>Start X: <span id="val-startx">-2.0</span></label>
-            <input type="range" id="startx" min="-5" max="5" step="0.1" value="-2.0">
+            <label>Start X: <span id="val-startx">3.0</span></label>
+            <input type="range" id="startx" min="-5" max="5" step="0.1" value="3.0">
             
-            <label>Start Y: <span id="val-starty">-2.4</span></label>
-            <input type="range" id="starty" min="-5" max="5" step="0.1" value="-2.4">
+            <label>Start Y: <span id="val-starty">3.0</span></label>
+            <input type="range" id="starty" min="-5" max="5" step="0.1" value="3.0">
             
             <label>Iteration Step: <span id="val-iter">20</span></label>
             <input type="range" id="iter" min="0" max="20" step="1" value="20">
@@ -218,23 +218,17 @@
             path_lm.push(p_lm);
         }
 
-        document.getElementById('val-lambda').innerText = cur_lambda.toExponential(2);
-        document.getElementById('val-cost').innerText = getCost(p_lm).toFixed(2);
+        // Update DOM Metrics (Using toExponential to handle very large starting costs cleanly)
+        document.getElementById('val-initcost').innerText = getCost([sx, sy]).toExponential(2);
+        document.getElementById('val-cost').innerText = getCost(p_lm).toExponential(2);
 
         // 5. BUILD TRACES
         let traces = [];
         
-        // Updated contour to Viridis with transparency
+        // Updated contour to Viridis with higher opacity
         traces.push({
             z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'fill'},
-            colorscale: 'Viridis', opacity: 0.4, showscale: false, ncontours: 60, hoverinfo: 'skip'
-        });
-
-        // Add Starting Point to the legend
-        traces.push({
-            x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', 
-            marker: {color: 'magenta', size: 10, line: {color: 'white', width: 1}}, 
-            showlegend: true
+            colorscale: 'Viridis', opacity: 0.7, showscale: false, ncontours: 60, hoverinfo: 'skip'
         });
 
         if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#E324B3', dash: 'dot', width: 2}});
@@ -242,11 +236,18 @@
         if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#32A852', dash: 'dash', width: 2}});
         if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#4B93FF', width: 2}});
         
-        // True Min (Show in legend)
+        // True Min
         traces.push({
             x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
             showlegend: true, hoverinfo: 'skip', 
             marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}
+        });
+
+        // Add Starting Point LAST so it renders completely on top of all paths and contours
+        traces.push({
+            x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', 
+            marker: {color: 'magenta', size: 10, line: {color: 'white', width: 1}}, 
+            showlegend: true
         });
 
         // 6. RENDER PLOT 
@@ -283,6 +284,5 @@
         }, 400);
     });
 </script>
-
 </body>
 </html>
