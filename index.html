@@ -7,84 +7,109 @@
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #333; }
-        /* Added text-align: center to h1 */
-        h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; text-align: center; }
-        .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 10px 0 20px 0; font-weight: bold; font-size: 1em; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; color: #333; }
+        h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; text-align: center; margin-bottom: 30px; }
+        
+        /* New Layout Styles */
+        .layout { display: flex; gap: 30px; align-items: flex-start; }
+        .sidebar { flex: 0 0 320px; background: #f8f9fa; padding: 20px; border-radius: 8px; box-sizing: border-box; }
+        .main-content { flex: 1; min-width: 0; } /* min-width: 0 prevents flex child from overflowing */
+        
+        .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 0 0 20px 0; font-weight: bold; font-size: 1em; }
         .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 5px; }
         .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); }
-        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 10px; }
+        
         .control-group { display: flex; flex-direction: column; }
         label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
-        input[type="range"], select { width: 100%; margin-bottom: 10px; padding: 5px; font-family: inherit; }
-        .toggles { display: flex; justify-content: space-between; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; }
-        .toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 0.9em; }
+        input[type="range"], select { width: 100%; margin-bottom: 10px; padding: 5px; font-family: inherit; box-sizing: border-box; }
+        
+        .toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 0.9em; margin-bottom: 10px; }
         .toggle-label input { margin-right: 8px; }
+        
+        hr { border: 0; border-top: 1px solid #e1e4e8; margin: 20px 0; }
+
+        /* Responsive stacking for smaller screens */
+        @media (max-width: 850px) {
+            .layout { flex-direction: column; }
+            .sidebar { flex: auto; width: 100%; }
+        }
     </style>
 </head>
 <body>
 
     <h1>Cost Function Solver Visualization</h1>
     
-    <div id="plot"></div>
-    
-    <div class="metrics-container">
-        <div style="text-align: center;">
-            <div class="metric-label">Initial Cost</div>
-            <!-- Changed Initial Cost color to black -->
-            <div class="metric-value" id="val-initcost" style="color: black;">0.00</div>
-        </div>
-        <div style="text-align: center;">
-            <div class="metric-label">GD Cost</div>
-            <div class="metric-value" id="val-gdcost" style="color: #FF00FF;">0.00</div>
-        </div>
-        <div style="text-align: center;">
-            <div class="metric-label">Newton Cost</div>
-            <div class="metric-value" id="val-nwcost" style="color: #FFA500;">0.00</div>
-        </div>
-        <div style="text-align: center;">
-            <div class="metric-label">GN Cost</div>
-            <div class="metric-value" id="val-gncost" style="color: #FF0000;">0.00</div>
-        </div>
-        <div style="text-align: center;">
-            <div class="metric-label">LM Cost</div>
-            <div class="metric-value" id="val-lmcost" style="color: #008B8B;">0.00</div>
-        </div>
-    </div>
+    <div class="layout">
+        <!-- LEFT SIDEBAR -->
+        <div class="sidebar">
+            <div class="control-group">
+                <label>Dataset / Objective Function:</label>
+                <select id="dataset" style="font-size: 14px; border-radius: 4px; padding: 6px;">
+                    <option value="exp">Exponential Fit: y = a * exp(b * x)</option>
+                    <option value="sine">Sine Wave Fit: y = sin(a * x + b)</option>
+                </select>
+            </div>
 
-    <div class="controls-grid">
-        <div class="control-group" style="grid-column: 1 / span 2;">
-            <label>Dataset / Objective Function:</label>
-            <select id="dataset" style="font-size: 15px; border-radius: 4px; padding: 8px;">
-                <option value="exp">Exponential Fit: y = a * exp(b * x) (Single Global Minimum)</option>
-                <option value="sine">Sine Wave Fit: y = sin(a * x + b) (Multiple Local Minima)</option>
-            </select>
+            <hr>
+
+            <div class="control-group">
+                <label>Start X: <span id="val-startx">3.0</span></label>
+                <input type="range" id="startx" min="-5" max="5" step="0.1" value="3.0">
+                
+                <label>Start Y: <span id="val-starty">3.0</span></label>
+                <input type="range" id="starty" min="-5" max="5" step="0.1" value="3.0">
+                
+                <label>Iteration Step: <span id="val-iter">20</span></label>
+                <input type="range" id="iter" min="0" max="20" step="1" value="20">
+            </div>
+
+            <hr>
+
+            <div class="control-group">
+                <label>Initial LM Lambda: <span id="val-initlambda">1.0</span></label>
+                <input type="range" id="initlambda" min="0.001" max="100" step="0.1" value="1.0">
+                
+                <label>GD Learning Rate: <span id="val-lr">0.050</span></label>
+                <input type="range" id="lr" min="0.001" max="0.2" step="0.001" value="0.05">
+            </div>
+
+            <hr>
+
+            <div class="control-group" style="margin-bottom: 0;">
+                <label class="toggle-label"><input type="checkbox" id="show-nw" checked> Newton</label>
+                <label class="toggle-label"><input type="checkbox" id="show-gn" checked> Gauss-Newton</label>
+                <label class="toggle-label"><input type="checkbox" id="show-lm" checked> Levenberg-Marquardt</label>
+                <label class="toggle-label" style="margin-bottom: 0;"><input type="checkbox" id="show-gd" checked> Gradient Descent</label>
+            </div>
         </div>
 
-        <div class="control-group">
-            <label>Start X: <span id="val-startx">3.0</span></label>
-            <input type="range" id="startx" min="-5" max="5" step="0.1" value="3.0">
+        <!-- RIGHT MAIN CONTENT -->
+        <div class="main-content">
+            <div class="metrics-container">
+                <div style="text-align: center;">
+                    <div class="metric-label">Initial Cost</div>
+                    <div class="metric-value" id="val-initcost" style="color: black;">0.00</div>
+                </div>
+                <div style="text-align: center;">
+                    <div class="metric-label">GD Cost</div>
+                    <div class="metric-value" id="val-gdcost" style="color: #FF00FF;">0.00</div>
+                </div>
+                <div style="text-align: center;">
+                    <div class="metric-label">Newton Cost</div>
+                    <div class="metric-value" id="val-nwcost" style="color: #FFA500;">0.00</div>
+                </div>
+                <div style="text-align: center;">
+                    <div class="metric-label">GN Cost</div>
+                    <div class="metric-value" id="val-gncost" style="color: #FF0000;">0.00</div>
+                </div>
+                <div style="text-align: center;">
+                    <div class="metric-label">LM Cost</div>
+                    <div class="metric-value" id="val-lmcost" style="color: #008B8B;">0.00</div>
+                </div>
+            </div>
             
-            <label>Start Y: <span id="val-starty">3.0</span></label>
-            <input type="range" id="starty" min="-5" max="5" step="0.1" value="3.0">
-            
-            <label>Iteration Step: <span id="val-iter">20</span></label>
-            <input type="range" id="iter" min="0" max="20" step="1" value="20">
+            <div id="plot"></div>
         </div>
-        <div class="control-group">
-            <label>Initial LM Lambda: <span id="val-initlambda">1.0</span></label>
-            <input type="range" id="initlambda" min="0.001" max="100" step="0.1" value="1.0">
-            
-            <label>GD Learning Rate: <span id="val-lr">0.050</span></label>
-            <input type="range" id="lr" min="0.001" max="0.2" step="0.001" value="0.05">
-        </div>
-    </div>
-
-    <div class="toggles">
-        <label class="toggle-label"><input type="checkbox" id="show-nw" checked> Newton</label>
-        <label class="toggle-label"><input type="checkbox" id="show-gn" checked> Gauss-Newton</label>
-        <label class="toggle-label"><input type="checkbox" id="show-lm" checked> Levenberg-Marquardt</label>
-        <label class="toggle-label"><input type="checkbox" id="show-gd" checked> Gradient Descent</label>
     </div>
 
 <script>
@@ -312,7 +337,7 @@
             marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}
         });
 
-        // Changed marker color to black to match the black 'val-initcost' text color
+        // Starting Point
         traces.push({
             x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', 
             marker: {color: 'black', size: 10, line: {color: 'white', width: 1}}, 
