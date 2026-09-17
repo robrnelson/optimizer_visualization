@@ -254,7 +254,6 @@
     }
 
     // --- GENERATE STATIC 3D SURFACE BACKGROUND ---
-    // In 3D, we don't recalculate the mesh on pan/zoom, we just let Plotly handle the camera
     const grid_size = 60;
     const a_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
     const b_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
@@ -265,14 +264,6 @@
     function updatePlot() {
         if (isUpdating) return;
         isUpdating = true;
-
-        let plotDiv = document.getElementById('plot');
-        
-        // Preserve 3D Camera Rotation
-        let currentCamera = { eye: {x: 1.5, y: 1.5, z: 1.5} }; 
-        if (plotDiv.layout && plotDiv.layout.scene && plotDiv.layout.scene.camera) {
-            currentCamera = plotDiv.layout.scene.camera;
-        }
 
         const Z_surface = [];
         for(let b of b_range) {
@@ -448,7 +439,6 @@
             colorscale: 'Viridis', opacity: 0.8, showscale: false, hoverinfo: 'skip'
         });
 
-        // Helper to format 3D paths (adding +0.1 to Z so it hovers slightly above the surface mesh)
         function make3DPath(path, name, color) {
             return {
                 type: 'scatter3d', mode: 'lines+markers', name: name,
@@ -463,14 +453,12 @@
         if(document.getElementById('show-lm').checked) traces.push(make3DPath(path_lm, 'Levenberg-Marquardt', '#0099FF'));
         if(document.getElementById('show-nm').checked) traces.push(make3DPath(path_nm, 'Nelder-Mead', '#32CD32'));
         
-        // True Min (Red cross marker hovering at the absolute bottom)
         traces.push({
             type: 'scatter3d', mode: 'markers', name: 'True Minimum', showlegend: true, hoverinfo: 'skip',
             x: [true_a], y: [true_b], z: [Math.log10(getCost([true_a, true_b]) + 1e-6) + 0.1],
             marker: {color: 'red', size: 6, symbol: 'cross'}
         });
 
-        // Starting Point (Black sphere)
         traces.push({
             type: 'scatter3d', mode: 'markers', name: 'Starting Point', showlegend: true,
             x: [sx], y: [sy], z: [Math.log10(getCost([sx, sy]) + 1e-6) + 0.1],
@@ -479,12 +467,12 @@
 
         // 7. RENDER 3D PLOT
         Plotly.react('plot', traces, {
+            uirevision: currentDataset, // Freezes camera panning/zoom across all standard UI updates!
             height: 650, margin: {l: 0, r: 0, t: 0, b: 0},
             scene: {
                 xaxis: {title: 'X Position (a)', range: [-5, 5]},
                 yaxis: {title: 'Y Position (b)', range: [-5, 5]},
-                zaxis: {title: 'Log10(Cost)'},
-                camera: currentCamera // Keeps your rotation steady when moving sliders
+                zaxis: {title: 'Log10(Cost)', range: [-1.5, 6]} // Capped Z-axis to stop jumping
             },
             legend: {orientation: 'h', y: -0.1},
             plot_bgcolor: 'white'
@@ -495,11 +483,6 @@
 
     document.getElementById('dataset').addEventListener('change', function() {
         initDataset();
-        // Resetting the camera specifically for a new dataset so the view is optimal
-        let plotDiv = document.getElementById('plot');
-        if (plotDiv.layout && plotDiv.layout.scene) {
-            plotDiv.layout.scene.camera = { eye: {x: 1.5, y: 1.5, z: 1.5} };
-        }
         updatePlot();
     });
 
