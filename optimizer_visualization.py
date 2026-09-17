@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 # Page configuration
 st.set_page_config(page_title="Streamlit Optimization Method Explorer", layout="wide")
@@ -10,6 +10,7 @@ st.header("Optimizer Path Comparison")
 st.markdown("""
 * Non-linear data fitting problem: $y = 2.0 e^{1.5x}$
 * Synthetic noisy data generated for demonstration.
+* **Scroll to zoom, drag to pan.**
 """)
 
 # --- Sidebar Controls ---
@@ -83,16 +84,15 @@ for _ in range(max_iter):
         step = np.linalg.solve(J.T @ J, J.T @ residuals(p))
         p = p - step
     except np.linalg.LinAlgError:
-        pass # Handle singular matrix if it diverges wildly
+        pass 
     steps_GN.append(p.copy())
 
 # 3. Newton's Method
 steps_Newton = [p_init.copy()]
 p = p_init.copy()
 for _ in range(max_iter):
-    J = jacobian(p)
     try:
-        step = np.linalg.solve(exact_hessian(p), J.T @ residuals(p))
+        step = np.linalg.solve(exact_hessian(p), jacobian(p).T @ residuals(p))
         p = p - step
     except np.linalg.LinAlgError:
         pass
@@ -131,25 +131,82 @@ steps_GN = np.array(steps_GN)
 steps_Newton = np.array(steps_Newton)
 steps_LM = np.array(steps_LM)
 
-# --- Plotting ---
-fig, ax = plt.subplots(figsize=(10, 6))
+# --- Calculate Contour Grid ---
+# We use a logarithmic scale for the cost function so the contour lines are evenly spaced
+a_range = np.linspace(-2.5, 4.5, 60)
+b_range = np.linspace(-2.5, 4.5, 60)
+A, B = np.meshgrid(a_range, b_range)
+Z = np.zeros_like(A)
 
+for i in range(A.shape[0]):
+    for j in range(A.shape[1]):
+        Z[i, j] = np.log10(get_cost([A[i, j], B[i, j]]) + 1e-6)
+
+# --- Plotting with Plotly ---
+fig = go.Figure()
+
+# Add Contour surface
+fig.add_trace(go.Contour(
+    x=a_range, y=b_range, z=Z,
+    colorscale='Viridis',
+    opacity=0.4,
+    showscale=False,
+    hoverinfo='skip'
+))
+
+# Add Optimizer Paths
 if show_gd:
-    ax.plot(steps_GD[:, 0], steps_GD[:, 1], 'm-', label="Gradient Descent", linewidth=1.5, alpha=0.8)
+    fig.add_trace(go.Scatter(
+        x=steps_GD[:, 0], y=steps_GD[:, 1],
+        mode='lines+markers', name="Gradient Descent",
+        line=dict(color='magenta', width=2),
+        marker=dict(symbol='square', size=6)
+    ))
+
 if show_nw:
-    ax.plot(steps_Newton[:, 0], steps_Newton[:, 1], 'g--o', label="Newton's Method", linewidth=1.5)
+    fig.add_trace(go.Scatter(
+        x=steps_Newton[:, 0], y=steps_Newton[:, 1],
+        mode='lines+markers', name="Newton's Method",
+        line=dict(color='green', width=2, dash='dash'),
+        marker=dict(symbol='circle', size=6)
+    ))
+
 if show_gn:
-    ax.plot(steps_GN[:, 0], steps_GN[:, 1], 'b-^', label="Gauss-Newton", linewidth=1.5)
+    fig.add_trace(go.Scatter(
+        x=steps_GN[:, 0], y=steps_GN[:, 1],
+        mode='lines+markers', name="Gauss-Newton",
+        line=dict(color='blue', width=2),
+        marker=dict(symbol='triangle-up', size=7)
+    ))
+
 if show_lm:
-    ax.plot(steps_LM[:, 0], steps_LM[:, 1], color='darkorange', marker='v', linestyle='-', label="dynamic Levenberg-Marquardt", linewidth=1.5)
+    fig.add_trace(go.Scatter(
+        x=steps_LM[:, 0], y=steps_LM[:, 1],
+        mode='lines+markers', name="dynamic Levenberg-Marquardt",
+        line=dict(color='darkorange', width=2),
+        marker=dict(symbol='triangle-down', size=7)
+    ))
 
-# True minimum indicator
-ax.plot(true_a, true_b, 'r*', markersize=10, label="True Minimum")
+# Add True Minimum
+fig.add_trace(go.Scatter(
+    x=[true_a], y=[true_b],
+    mode='markers', name="True Minimum",
+    marker=dict(color='red', symbol='star', size=12)
+))
 
-# Styling
-ax.grid(True, linestyle='-', color='0.8')
-ax.set_xlim(-2.5, 4.5)
-ax.set_ylim(-2.5, 4.5)
-ax.legend(loc='upper left', frameon=True)
+# Style and adjust height
+fig.update_layout(
+    height=550,  # Makes the plot shorter
+    xaxis_title="Parameter a",
+    yaxis_title="Parameter b",
+    xaxis=dict(range=[-2.5, 4.5], zeroline=False),
+    yaxis=dict(range=[-2.5, 4.5], zeroline=False),
+    legend=dict(
+        yanchor="top", y=0.99,
+        xanchor="left", x=0.01,
+        bgcolor="rgba(255, 255, 255, 0.8)"
+    ),
+    margin=dict(l=20, r=20, t=30, b=20)
+)
 
-st.pyplot(fig)
+st.plotly_chart(fig, use_container_width=True)
