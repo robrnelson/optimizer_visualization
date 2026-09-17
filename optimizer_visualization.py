@@ -132,7 +132,7 @@ steps_Newton = np.array(steps_Newton)
 steps_LM = np.array(steps_LM)
 
 # --- Calculate Contour Grid ---
-# We use a logarithmic scale for the cost function so the contour lines are evenly spaced
+# Removed logarithmic scaling, now using raw linear cost values
 a_range = np.linspace(-2.5, 4.5, 60)
 b_range = np.linspace(-2.5, 4.5, 60)
 A, B = np.meshgrid(a_range, b_range)
@@ -140,7 +140,7 @@ Z = np.zeros_like(A)
 
 for i in range(A.shape[0]):
     for j in range(A.shape[1]):
-        Z[i, j] = np.log10(get_cost([A[i, j], B[i, j]]) + 1e-6)
+        Z[i, j] = get_cost([A[i, j], B[i, j]])
 
 # --- Plotting with Plotly ---
 fig = go.Figure()
@@ -151,7 +151,9 @@ fig.add_trace(go.Contour(
     colorscale='Viridis',
     opacity=0.4,
     showscale=False,
-    hoverinfo='skip'
+    hoverinfo='skip',
+    # Optional: You can uncomment the line below if you want Plotly to draw more contour lines dynamically
+    # ncontours=30 
 ))
 
 # Add Optimizer Paths
@@ -196,7 +198,7 @@ fig.add_trace(go.Scatter(
 
 # Style and adjust height
 fig.update_layout(
-    height=550,  # Makes the plot shorter
+    height=550,  
     xaxis_title="Parameter a",
     yaxis_title="Parameter b",
     xaxis=dict(range=[-2.5, 4.5], zeroline=False),
