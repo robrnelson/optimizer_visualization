@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Algorithm Optimizer Visualization</title>
+    <title>Cost Function Solver Visualization</title>
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -23,7 +23,7 @@
 </head>
 <body>
 
-    <h1>LM Algorithm Optimizer</h1>
+    <h1>Cost Function Solver Visualization</h1>
     
     <div id="plot"></div>
     
@@ -90,7 +90,6 @@
     // --- DATA & DOMAIN ---
     const x_data = Array.from({length: 10}, (_, i) => i / 9.0);
     const true_a = 2.0, true_b = 1.5;
-    // Generate y_data with deterministic pseudo-random noise to match Python seed 42
     const noise = [0.0496714, -0.0138264, 0.0647688, 0.1523029, -0.0234153, -0.0234136, 0.1579212, 0.0767434, -0.0469474, 0.054256];
     const y_data = x_data.map((x, i) => true_a * Math.exp(true_b * x) + noise[i]);
 
@@ -114,34 +113,57 @@
         return H;
     }
 
-    // --- CALCULATE CONTOUR BACKGROUND ---
-    const grid_size = 60;
-    const a_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
-    const b_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
-    const Z = [];
-    for(let b of b_range) {
-        let row = [];
-        for(let a of a_range) {
-            row.push(Math.log10(getCost([a, b]) + 1e-6));
-        }
-        Z.push(row);
-    }
-
     // --- MAIN UPDATE FUNCTION ---
+    let isUpdating = false; // Flag to prevent infinite drawing loops
+
     function updatePlot() {
+        if (isUpdating) return;
+        isUpdating = true;
+
+        let plotDiv = document.getElementById('plot');
+        
+        // 1. DYNAMICALLY READ CURRENT ZOOM/PAN BOUNDS
+        let currentXRange = [-5, 5];
+        let currentYRange = [-5, 5];
+        
+        if (plotDiv.layout && plotDiv.layout.xaxis && plotDiv.layout.xaxis.range) {
+            currentXRange = plotDiv.layout.xaxis.range;
+            currentYRange = plotDiv.layout.yaxis.range;
+        }
+
+        // 2. GENERATE CONTOUR GRID TO FILL THE EXACT VIEWPORT
+        const grid_size = 80;
+        const x_min = currentXRange[0];
+        const x_max = currentXRange[1];
+        const y_min = currentYRange[0];
+        const y_max = currentYRange[1];
+        
+        const a_range = Array.from({length: grid_size}, (_, i) => x_min + ((x_max - x_min) * i / (grid_size - 1)));
+        const b_range = Array.from({length: grid_size}, (_, i) => y_min + ((y_max - y_min) * i / (grid_size - 1)));
+
+        const Z = [];
+        for(let b of b_range) {
+            let row = [];
+            for(let a of a_range) {
+                row.push(Math.log10(getCost([a, b]) + 1e-6));
+            }
+            Z.push(row);
+        }
+
+        // 3. READ SLIDERS
         let sx = parseFloat(document.getElementById('startx').value);
         let sy = parseFloat(document.getElementById('starty').value);
         let iters = parseInt(document.getElementById('iter').value);
         let init_lambda = parseFloat(document.getElementById('initlambda').value);
         let lr = parseFloat(document.getElementById('lr').value);
 
-        // Update Labels
         document.getElementById('val-startx').innerText = sx.toFixed(1);
         document.getElementById('val-starty').innerText = sy.toFixed(1);
         document.getElementById('val-iter').innerText = iters;
         document.getElementById('val-initlambda').innerText = init_lambda.toFixed(2);
         document.getElementById('val-lr').innerText = lr.toFixed(3);
 
+        // 4. RUN OPTIMIZATION ALGORITHMS
         let p_gd = [sx, sy], p_gn = [sx, sy], p_nw = [sx, sy], p_lm = [sx, sy];
         let path_gd = [p_gd], path_gn = [p_gn], path_nw = [p_nw], path_lm = [p_lm];
         let cur_lambda = init_lambda;
@@ -192,11 +214,13 @@
         document.getElementById('val-lambda').innerText = cur_lambda.toExponential(2);
         document.getElementById('val-cost').innerText = getCost(p_lm).toFixed(2);
 
-        // Build traces
+        // 5. BUILD TRACES
         let traces = [];
+        
+        // Insert the dynamic contour map
         traces.push({
             z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'lines'},
-            line: {width: 1}, colorscale: 'Greys', opacity: 0.3, showscale: false, ncontours: 45, hoverinfo: 'skip'
+            line: {width: 1}, colorscale: 'Greys', opacity: 0.3, showscale: false, ncontours: 60, hoverinfo: 'skip'
         });
 
         if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#E324B3', dash: 'dot', width: 2}});
@@ -207,30 +231,29 @@
         // True Min
         traces.push({x: [true_a], y: [true_b], mode: 'markers', showlegend: false, hoverinfo: 'skip', marker: {color: 'white', size: 12, line: {color: '#32A852', width: 2}}});
 
-        // PRESERVE ZOOM/PAN STATE
-        let plotDiv = document.getElementById('plot');
-        let currentXRange = [-5, 5];
-        let currentYRange = [-5, 5];
-        
-        if (plotDiv.layout && plotDiv.layout.xaxis && plotDiv.layout.yaxis) {
-            currentXRange = plotDiv.layout.xaxis.range;
-            currentYRange = plotDiv.layout.yaxis.range;
-        }
-
+        // 6. RENDER PLOT (Using the preserved zoom ranges)
         Plotly.react('plot', traces, {
             height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
             xaxis: {title: 'X Position →', range: currentXRange},
             yaxis: {title: 'Y Position ↑', range: currentYRange},
             legend: {orientation: 'h', y: -0.15},
             plot_bgcolor: 'white'
-        }, {responsive: true});
+        }, {responsive: true}).then(() => {
+            // Once drawing is finished, release the lock
+            isUpdating = false;
+        });
     }
 
-    // Attach listeners to update in real-time
+    // Attach listeners to update when you move the sliders or toggles
     document.querySelectorAll('input').forEach(el => el.addEventListener('input', updatePlot));
     
     // Initial draw
     updatePlot();
+
+    // NEW: Attach listener to update the contour grid when you zoom or pan
+    document.getElementById('plot').on('plotly_relayout', function(eventData) {
+        updatePlot();
+    });
 </script>
 
 </body>
