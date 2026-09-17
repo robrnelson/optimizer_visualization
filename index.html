@@ -9,10 +9,10 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #333; }
         h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; }
-        .metrics-container { display: flex; justify-content: space-around; padding: 15px; margin-top: -20px; font-weight: bold; font-size: 1.1em; }
-        .metric-label { font-size: 0.8em; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-        .metric-value { font-size: 1.4em; }
-        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 10px 0 20px 0; font-weight: bold; font-size: 1em; }
+        .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+        .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); }
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 10px; }
         .control-group { display: flex; flex-direction: column; }
         label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
         input[type="range"], select { width: 100%; margin-bottom: 10px; padding: 5px; font-family: inherit; }
@@ -30,11 +30,23 @@
     <div class="metrics-container">
         <div style="text-align: center;">
             <div class="metric-label">Initial Cost</div>
-            <div class="metric-value" id="val-initcost">0.00</div>
+            <div class="metric-value" id="val-initcost" style="color: magenta;">0.00</div>
         </div>
         <div style="text-align: center;">
-            <div class="metric-label">Current LM Cost</div>
-            <div class="metric-value" id="val-cost">0.00</div>
+            <div class="metric-label">GD Cost</div>
+            <div class="metric-value" id="val-gdcost" style="color: #FF00FF;">0.00</div>
+        </div>
+        <div style="text-align: center;">
+            <div class="metric-label">Newton Cost</div>
+            <div class="metric-value" id="val-nwcost" style="color: #FFA500;">0.00</div>
+        </div>
+        <div style="text-align: center;">
+            <div class="metric-label">GN Cost</div>
+            <div class="metric-value" id="val-gncost" style="color: #FF0000;">0.00</div>
+        </div>
+        <div style="text-align: center;">
+            <div class="metric-label">LM Cost</div>
+            <div class="metric-value" id="val-lmcost" style="color: #008B8B;">0.00</div>
         </div>
     </div>
 
@@ -271,13 +283,19 @@
             path_lm.push(p_lm);
         }
 
+        // 5. UPDATE METRICS UI
         document.getElementById('val-initcost').innerText = getCost([sx, sy]).toExponential(2);
-        document.getElementById('val-cost').innerText = getCost(p_lm).toExponential(2);
+        document.getElementById('val-gdcost').innerText = getCost(p_gd).toExponential(2);
+        document.getElementById('val-nwcost').innerText = getCost(p_nw).toExponential(2);
+        document.getElementById('val-gncost').innerText = getCost(p_gn).toExponential(2);
+        document.getElementById('val-lmcost').innerText = getCost(p_lm).toExponential(2);
+        
+        // Note: For text readability against a white background, LM Cost is set to a darker cyan (#008B8B)
+        // in the HTML structure above, while the line itself remains bright cyan (#00E5FF).
 
-        // 5. BUILD TRACES
+        // 6. BUILD TRACES
         let traces = [];
         
-        // Updated contour to Viridis with higher opacity
         traces.push({
             z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'fill'},
             colorscale: 'Viridis', opacity: 0.75, showscale: false, ncontours: 60, hoverinfo: 'skip'
@@ -288,7 +306,7 @@
         if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#FF0000', dash: 'dash', width: 2}});
         if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#00E5FF', width: 2}});
         
-        // True Min (Show in legend, White with Red Edge)
+        // True Min (White with Red Edge)
         traces.push({
             x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
             showlegend: true, hoverinfo: 'skip', 
@@ -302,7 +320,7 @@
             showlegend: true
         });
 
-        // 6. RENDER PLOT 
+        // 7. RENDER PLOT 
         isProgrammaticUpdate = true; 
         Plotly.react('plot', traces, {
             height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
