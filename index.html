@@ -116,7 +116,7 @@
                 </div>
                 <div class="metric-block">
                     <div class="metric-label">LM Cost</div>
-                    <div class="metric-value" id="val-lmcost" style="color: #008B8B;">0.00</div>
+                    <div class="metric-value" id="val-lmcost" style="color: #0099FF;">0.00</div>
                     <div class="metric-chi" id="chi-lm">(χ²_ν: 0.00)</div>
                     <div class="metric-iters" id="iter-lm">Iters: -</div>
                 </div>
@@ -311,7 +311,7 @@
         let cur_lambda = init_lambda;
 
         // Convergence Tracking
-        const TOL = 1e-4; // If the step size is smaller than this, it has essentially stopped moving
+        const TOL = 1e-4; 
         let done_gd = false, done_gn = false, done_nw = false, done_lm = false;
         let conv_gd = iters, conv_gn = iters, conv_nw = iters, conv_lm = iters;
 
@@ -382,7 +382,6 @@
         let cost_gn = getCost(p_gn);
         let cost_lm = getCost(p_lm);
 
-        // Apply Smart Formatting
         document.getElementById('val-initcost').innerText = formatNum(cost_init);
         document.getElementById('val-gdcost').innerText = formatNum(cost_gd);
         document.getElementById('val-nwcost').innerText = formatNum(cost_nw);
@@ -412,7 +411,7 @@
         if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#FF00FF', dash: 'dot', width: 2}});
         if(document.getElementById('show-nw').checked) traces.push({x: path_nw.map(p=>p[0]), y: path_nw.map(p=>p[1]), mode: 'lines+markers', name: 'Newton', line: {color: '#FFA500', width: 2}});
         if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#FF0000', dash: 'dash', width: 2}});
-        if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#00E5FF', width: 2}});
+        if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#0099FF', width: 2}});
         
         traces.push({
             x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
