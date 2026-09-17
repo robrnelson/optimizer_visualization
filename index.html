@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LM Algorithm Optimizer</title>
+    <title>Algorithm Optimizer Visualization</title>
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -207,10 +207,20 @@
         // True Min
         traces.push({x: [true_a], y: [true_b], mode: 'markers', showlegend: false, hoverinfo: 'skip', marker: {color: 'white', size: 12, line: {color: '#32A852', width: 2}}});
 
+        // PRESERVE ZOOM/PAN STATE
+        let plotDiv = document.getElementById('plot');
+        let currentXRange = [-5, 5];
+        let currentYRange = [-5, 5];
+        
+        if (plotDiv.layout && plotDiv.layout.xaxis && plotDiv.layout.yaxis) {
+            currentXRange = plotDiv.layout.xaxis.range;
+            currentYRange = plotDiv.layout.yaxis.range;
+        }
+
         Plotly.react('plot', traces, {
             height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
-            xaxis: {title: 'X Position →', range: [-5, 5]},
-            yaxis: {title: 'Y Position ↑', range: [-5, 5]},
+            xaxis: {title: 'X Position →', range: currentXRange},
+            yaxis: {title: 'Y Position ↑', range: currentYRange},
             legend: {orientation: 'h', y: -0.15},
             plot_bgcolor: 'white'
         }, {responsive: true});
