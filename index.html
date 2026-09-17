@@ -8,7 +8,8 @@
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #333; }
-        h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; }
+        /* Added text-align: center to h1 */
+        h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; text-align: center; }
         .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 10px 0 20px 0; font-weight: bold; font-size: 1em; }
         .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 5px; }
         .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); }
@@ -30,7 +31,8 @@
     <div class="metrics-container">
         <div style="text-align: center;">
             <div class="metric-label">Initial Cost</div>
-            <div class="metric-value" id="val-initcost" style="color: magenta;">0.00</div>
+            <!-- Changed Initial Cost color to black -->
+            <div class="metric-value" id="val-initcost" style="color: black;">0.00</div>
         </div>
         <div style="text-align: center;">
             <div class="metric-label">GD Cost</div>
@@ -289,9 +291,6 @@
         document.getElementById('val-nwcost').innerText = getCost(p_nw).toExponential(2);
         document.getElementById('val-gncost').innerText = getCost(p_gn).toExponential(2);
         document.getElementById('val-lmcost').innerText = getCost(p_lm).toExponential(2);
-        
-        // Note: For text readability against a white background, LM Cost is set to a darker cyan (#008B8B)
-        // in the HTML structure above, while the line itself remains bright cyan (#00E5FF).
 
         // 6. BUILD TRACES
         let traces = [];
@@ -306,17 +305,17 @@
         if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#FF0000', dash: 'dash', width: 2}});
         if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#00E5FF', width: 2}});
         
-        // True Min (White with Red Edge)
+        // True Min
         traces.push({
             x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
             showlegend: true, hoverinfo: 'skip', 
             marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}
         });
 
-        // Add Starting Point LAST so it renders completely on top of all paths and contours
+        // Changed marker color to black to match the black 'val-initcost' text color
         traces.push({
             x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', 
-            marker: {color: 'magenta', size: 10, line: {color: 'white', width: 1}}, 
+            marker: {color: 'black', size: 10, line: {color: 'white', width: 1}}, 
             showlegend: true
         });
 
@@ -338,7 +337,7 @@
     // Handle dataset change
     document.getElementById('dataset').addEventListener('change', function() {
         initDataset();
-        forceReset = true; // Reset zoom to [-5, 5] to see the new landscape clearly
+        forceReset = true; 
         updatePlot();
     });
 
