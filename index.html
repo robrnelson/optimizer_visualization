@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cost Function Solver Visualization</title>
+    <title>Cost Function Solver Visualization (3D)</title>
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; color: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; color: #333; }
         h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; text-align: center; margin-bottom: 30px; }
         
         .layout { display: flex; gap: 30px; align-items: flex-start; }
         .sidebar { flex: 0 0 320px; background: #f8f9fa; padding: 20px; border-radius: 8px; box-sizing: border-box; }
         .main-content { flex: 1; min-width: 0; }
         
-        .metrics-container { display: flex; justify-content: space-around; flex-wrap: wrap; padding: 20px 0 0 0; font-weight: bold; font-size: 1em; }
-        .metric-block { display: flex; flex-direction: column; align-items: center; width: 18%; }
+        .metrics-container { display: flex; justify-content: space-between; flex-wrap: wrap; padding: 20px 0 0 0; font-weight: bold; font-size: 1em; }
+        .metric-block { display: flex; flex-direction: column; align-items: center; width: 16%; }
         .metric-label { font-size: 0.75em; color: #666; text-transform: uppercase; margin-bottom: 2px; text-align: center; }
-        .metric-value { font-size: 1.4em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); margin-bottom: 2px; }
+        .metric-value { font-size: 1.3em; text-shadow: 0px 1px 1px rgba(0,0,0,0.1); margin-bottom: 2px; }
         .metric-chi { font-size: 0.75em; color: #888; font-weight: 500; }
         .metric-iters { font-size: 0.8em; color: #444; font-weight: 600; margin-top: 4px; background: #eee; padding: 2px 8px; border-radius: 12px; }
         
@@ -25,15 +25,15 @@
         label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
         input[type="range"], select { width: 100%; margin-bottom: 10px; padding: 5px; font-family: inherit; box-sizing: border-box; }
         
-        .toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 0.9em; margin-bottom: 10px; }
+        .toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 0.85em; margin-bottom: 8px; }
         .toggle-label input { margin-right: 8px; }
         
         hr { border: 0; border-top: 1px solid #e1e4e8; margin: 20px 0; }
 
-        @media (max-width: 850px) {
+        @media (max-width: 1000px) {
             .layout { flex-direction: column; }
             .sidebar { flex: auto; width: 100%; }
-            .metric-block { width: 45%; margin-bottom: 15px; }
+            .metric-block { width: 30%; margin-bottom: 15px; }
         }
     </style>
 </head>
@@ -78,10 +78,11 @@
             <hr>
 
             <div class="control-group" style="margin-bottom: 0;">
-                <label class="toggle-label"><input type="checkbox" id="show-nw" checked> Newton</label>
-                <label class="toggle-label"><input type="checkbox" id="show-gn" checked> Gauss-Newton</label>
-                <label class="toggle-label"><input type="checkbox" id="show-lm" checked> Levenberg-Marquardt</label>
-                <label class="toggle-label" style="margin-bottom: 0;"><input type="checkbox" id="show-gd" checked> Gradient Descent</label>
+                <label class="toggle-label"><input type="checkbox" id="show-gd" checked> Gradient Descent (Magenta)</label>
+                <label class="toggle-label"><input type="checkbox" id="show-nw" checked> Newton (Orange)</label>
+                <label class="toggle-label"><input type="checkbox" id="show-gn" checked> Gauss-Newton (Red)</label>
+                <label class="toggle-label"><input type="checkbox" id="show-lm" checked> Lev-Marquardt (Cyan)</label>
+                <label class="toggle-label" style="margin-bottom: 0;"><input type="checkbox" id="show-nm" checked> Nelder-Mead (Green)</label>
             </div>
         </div>
 
@@ -94,7 +95,7 @@
                     <div class="metric-label">Initial Cost</div>
                     <div class="metric-value" id="val-initcost" style="color: black;">0.00</div>
                     <div class="metric-chi" id="chi-init">(χ²_ν: 0.00)</div>
-                    <div class="metric-iters" style="opacity: 0;">-</div> <!-- Spacer -->
+                    <div class="metric-iters" style="opacity: 0;">-</div> 
                 </div>
                 <div class="metric-block">
                     <div class="metric-label">GD Cost</div>
@@ -120,13 +121,18 @@
                     <div class="metric-chi" id="chi-lm">(χ²_ν: 0.00)</div>
                     <div class="metric-iters" id="iter-lm">Iters: -</div>
                 </div>
+                <div class="metric-block">
+                    <div class="metric-label">NM Cost</div>
+                    <div class="metric-value" id="val-nmcost" style="color: #32CD32;">0.00</div>
+                    <div class="metric-chi" id="chi-nm">(χ²_ν: 0.00)</div>
+                    <div class="metric-iters" id="iter-nm">Iters: -</div>
+                </div>
             </div>
         </div>
     </div>
 
 <script>
     // --- UTILITIES ---
-    // Smart formatter: uses standard decimals unless numbers are huge or tiny to prevent text overflow
     function formatNum(val) {
         if (!isFinite(val)) return "NaN";
         if (val === 0) return "0.00";
@@ -134,7 +140,6 @@
         return val.toFixed(2);
     }
     
-    // Calculates distance between two points to check for convergence
     function getDistance(p1, p2) {
         return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
     }
@@ -248,10 +253,14 @@
         return H;
     }
 
+    // --- GENERATE STATIC 3D SURFACE BACKGROUND ---
+    // In 3D, we don't recalculate the mesh on pan/zoom, we just let Plotly handle the camera
+    const grid_size = 60;
+    const a_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
+    const b_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
+
     // --- MAIN UPDATE FUNCTION ---
     let isUpdating = false; 
-    let isProgrammaticUpdate = false; 
-    let forceReset = false;
 
     function updatePlot() {
         if (isUpdating) return;
@@ -259,31 +268,13 @@
 
         let plotDiv = document.getElementById('plot');
         
-        let currentXRange = [-5, 5];
-        let currentYRange = [-5, 5];
-        let currentDragMode = 'zoom';
-        
-        if (plotDiv.layout && !forceReset) {
-            if (plotDiv.layout.xaxis && plotDiv.layout.xaxis.range) {
-                currentXRange = plotDiv.layout.xaxis.range;
-                currentYRange = plotDiv.layout.yaxis.range;
-            }
-            if (plotDiv.layout.dragmode) {
-                currentDragMode = plotDiv.layout.dragmode;
-            }
+        // Preserve 3D Camera Rotation
+        let currentCamera = { eye: {x: 1.5, y: 1.5, z: 1.5} }; 
+        if (plotDiv.layout && plotDiv.layout.scene && plotDiv.layout.scene.camera) {
+            currentCamera = plotDiv.layout.scene.camera;
         }
-        forceReset = false;
 
-        const grid_size = 80;
-        const x_min = currentXRange[0];
-        const x_max = currentXRange[1];
-        const y_min = currentYRange[0];
-        const y_max = currentYRange[1];
-        
-        const a_range = Array.from({length: grid_size}, (_, i) => x_min + ((x_max - x_min) * i / (grid_size - 1)));
-        const b_range = Array.from({length: grid_size}, (_, i) => y_min + ((y_max - y_min) * i / (grid_size - 1)));
-
-        const Z = [];
+        const Z_surface = [];
         for(let b of b_range) {
             let row = [];
             for(let a of a_range) {
@@ -291,7 +282,7 @@
                 if(!isFinite(cost)) cost = 1e10; 
                 row.push(Math.log10(cost + 1e-6));
             }
-            Z.push(row);
+            Z_surface.push(row);
         }
 
         let sx = parseFloat(document.getElementById('startx').value);
@@ -308,12 +299,19 @@
 
         let p_gd = [sx, sy], p_gn = [sx, sy], p_nw = [sx, sy], p_lm = [sx, sy];
         let path_gd = [p_gd], path_gn = [p_gn], path_nw = [p_nw], path_lm = [p_lm];
+        
+        // Nelder-Mead Initial Simplex
+        let nm_simplex = [ [sx, sy], [sx + 0.5, sy], [sx, sy + 0.5] ];
+        nm_simplex.sort((a, b) => getCost(a) - getCost(b));
+        let p_nm = nm_simplex[0];
+        let path_nm = [p_nm];
+
         let cur_lambda = init_lambda;
 
         // Convergence Tracking
         const TOL = 1e-4; 
-        let done_gd = false, done_gn = false, done_nw = false, done_lm = false;
-        let conv_gd = iters, conv_gn = iters, conv_nw = iters, conv_lm = iters;
+        let done_gd = false, done_gn = false, done_nw = false, done_lm = false, done_nm = false;
+        let conv_gd = iters, conv_gn = iters, conv_nw = iters, conv_lm = iters, conv_nm = iters;
 
         for(let i=0; i<iters; i++) {
             // Gradient Descent
@@ -373,6 +371,43 @@
                 } catch(e) { cur_lambda *= 10.0; }
             }
             path_lm.push(p_lm);
+
+            // Nelder-Mead
+            if (!done_nm) {
+                let centroid = [ (nm_simplex[0][0] + nm_simplex[1][0])/2.0, (nm_simplex[0][1] + nm_simplex[1][1])/2.0 ];
+                let worst = nm_simplex[2];
+                let ref = [ centroid[0] + 1.0*(centroid[0] - worst[0]), centroid[1] + 1.0*(centroid[1] - worst[1]) ];
+                let cost_ref = getCost(ref);
+                let cost_best = getCost(nm_simplex[0]);
+                let cost_good = getCost(nm_simplex[1]);
+                let cost_worst = getCost(nm_simplex[2]);
+
+                if (cost_ref >= cost_best && cost_ref < cost_good) {
+                    nm_simplex[2] = ref;
+                } else if (cost_ref < cost_best) {
+                    let exp = [ centroid[0] + 2.0*(ref[0] - centroid[0]), centroid[1] + 2.0*(ref[1] - centroid[1]) ];
+                    if (getCost(exp) < cost_ref) nm_simplex[2] = exp;
+                    else nm_simplex[2] = ref;
+                } else {
+                    let contracted = false;
+                    if (cost_ref < cost_worst) {
+                        let cont = [ centroid[0] + 0.5*(ref[0] - centroid[0]), centroid[1] + 0.5*(ref[1] - centroid[1]) ];
+                        if (getCost(cont) <= cost_ref) { nm_simplex[2] = cont; contracted = true; }
+                    } else {
+                        let cont = [ centroid[0] + 0.5*(worst[0] - centroid[0]), centroid[1] + 0.5*(worst[1] - centroid[1]) ];
+                        if (getCost(cont) < cost_worst) { nm_simplex[2] = cont; contracted = true; }
+                    }
+                    if (!contracted) {
+                        nm_simplex[1] = [ nm_simplex[0][0] + 0.5*(nm_simplex[1][0] - nm_simplex[0][0]), nm_simplex[0][1] + 0.5*(nm_simplex[1][1] - nm_simplex[0][1]) ];
+                        nm_simplex[2] = [ nm_simplex[0][0] + 0.5*(nm_simplex[2][0] - nm_simplex[0][0]), nm_simplex[0][1] + 0.5*(nm_simplex[2][1] - nm_simplex[0][1]) ];
+                    }
+                }
+                nm_simplex.sort((a, b) => getCost(a) - getCost(b));
+                let p_next = nm_simplex[0];
+                if (getDistance(p_nm, p_next) < TOL) { done_nm = true; conv_nm = i + 1; }
+                p_nm = p_next;
+            }
+            path_nm.push(p_nm);
         }
 
         // 5. UPDATE METRICS UI
@@ -381,82 +416,98 @@
         let cost_nw = getCost(p_nw);
         let cost_gn = getCost(p_gn);
         let cost_lm = getCost(p_lm);
+        let cost_nm = getCost(p_nm);
 
         document.getElementById('val-initcost').innerText = formatNum(cost_init);
         document.getElementById('val-gdcost').innerText = formatNum(cost_gd);
         document.getElementById('val-nwcost').innerText = formatNum(cost_nw);
         document.getElementById('val-gncost').innerText = formatNum(cost_gn);
         document.getElementById('val-lmcost').innerText = formatNum(cost_lm);
+        document.getElementById('val-nmcost').innerText = formatNum(cost_nm);
 
         document.getElementById('chi-init').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_init))})`;
         document.getElementById('chi-gd').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_gd))})`;
         document.getElementById('chi-nw').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_nw))})`;
         document.getElementById('chi-gn').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_gn))})`;
         document.getElementById('chi-lm').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_lm))})`;
+        document.getElementById('chi-nm').innerText = `(χ²_ν: ${formatNum(getReducedChiSq(cost_nm))})`;
 
         // Update Convergence Texts
         document.getElementById('iter-gd').innerText = done_gd ? `Iters: ${conv_gd}` : `Iters: ${iters}+`;
         document.getElementById('iter-nw').innerText = (done_nw && conv_nw !== "Failed") ? `Iters: ${conv_nw}` : (conv_nw === "Failed" ? "Failed" : `Iters: ${iters}+`);
         document.getElementById('iter-gn').innerText = (done_gn && conv_gn !== "Failed") ? `Iters: ${conv_gn}` : (conv_gn === "Failed" ? "Failed" : `Iters: ${iters}+`);
         document.getElementById('iter-lm').innerText = done_lm ? `Iters: ${conv_lm}` : `Iters: ${iters}+`;
+        document.getElementById('iter-nm').innerText = done_nm ? `Iters: ${conv_nm}` : `Iters: ${iters}+`;
 
-        // 6. BUILD TRACES
+        // 6. BUILD 3D TRACES
         let traces = [];
         
+        // 3D Surface Background
         traces.push({
-            z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'fill'},
-            colorscale: 'Viridis', opacity: 0.75, showscale: false, ncontours: 60, hoverinfo: 'skip'
+            z: Z_surface, x: a_range, y: b_range, type: 'surface',
+            colorscale: 'Viridis', opacity: 0.8, showscale: false, hoverinfo: 'skip'
         });
 
-        if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#FF00FF', dash: 'dot', width: 2}});
-        if(document.getElementById('show-nw').checked) traces.push({x: path_nw.map(p=>p[0]), y: path_nw.map(p=>p[1]), mode: 'lines+markers', name: 'Newton', line: {color: '#FFA500', width: 2}});
-        if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#FF0000', dash: 'dash', width: 2}});
-        if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#0099FF', width: 2}});
+        // Helper to format 3D paths (adding +0.1 to Z so it hovers slightly above the surface mesh)
+        function make3DPath(path, name, color) {
+            return {
+                type: 'scatter3d', mode: 'lines+markers', name: name,
+                x: path.map(p => p[0]), y: path.map(p => p[1]), z: path.map(p => Math.log10(getCost(p) + 1e-6) + 0.1),
+                line: {color: color, width: 4}, marker: {color: color, size: 4}
+            };
+        }
+
+        if(document.getElementById('show-gd').checked) traces.push(make3DPath(path_gd, 'Gradient Descent', '#FF00FF'));
+        if(document.getElementById('show-nw').checked) traces.push(make3DPath(path_nw, 'Newton', '#FFA500'));
+        if(document.getElementById('show-gn').checked) traces.push(make3DPath(path_gn, 'Gauss-Newton', '#FF0000'));
+        if(document.getElementById('show-lm').checked) traces.push(make3DPath(path_lm, 'Levenberg-Marquardt', '#0099FF'));
+        if(document.getElementById('show-nm').checked) traces.push(make3DPath(path_nm, 'Nelder-Mead', '#32CD32'));
         
+        // True Min (Red cross marker hovering at the absolute bottom)
         traces.push({
-            x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
-            showlegend: true, hoverinfo: 'skip', 
-            marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}
+            type: 'scatter3d', mode: 'markers', name: 'True Minimum', showlegend: true, hoverinfo: 'skip',
+            x: [true_a], y: [true_b], z: [Math.log10(getCost([true_a, true_b]) + 1e-6) + 0.1],
+            marker: {color: 'red', size: 6, symbol: 'cross'}
         });
 
+        // Starting Point (Black sphere)
         traces.push({
-            x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', 
-            marker: {color: 'black', size: 10, line: {color: 'white', width: 1}}, 
-            showlegend: true
+            type: 'scatter3d', mode: 'markers', name: 'Starting Point', showlegend: true,
+            x: [sx], y: [sy], z: [Math.log10(getCost([sx, sy]) + 1e-6) + 0.1],
+            marker: {color: 'black', size: 6, symbol: 'circle'}
         });
 
-        // 7. RENDER PLOT 
-        isProgrammaticUpdate = true; 
+        // 7. RENDER 3D PLOT
         Plotly.react('plot', traces, {
-            height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
-            xaxis: {title: 'X Position →', range: currentXRange},
-            yaxis: {title: 'Y Position ↑', range: currentYRange},
-            legend: {orientation: 'h', y: -0.15},
-            plot_bgcolor: 'white',
-            dragmode: currentDragMode
+            height: 650, margin: {l: 0, r: 0, t: 0, b: 0},
+            scene: {
+                xaxis: {title: 'X Position (a)', range: [-5, 5]},
+                yaxis: {title: 'Y Position (b)', range: [-5, 5]},
+                zaxis: {title: 'Log10(Cost)'},
+                camera: currentCamera // Keeps your rotation steady when moving sliders
+            },
+            legend: {orientation: 'h', y: -0.1},
+            plot_bgcolor: 'white'
         }, {responsive: true}).then(() => {
             isUpdating = false;
-            setTimeout(() => { isProgrammaticUpdate = false; }, 50);
         });
     }
 
     document.getElementById('dataset').addEventListener('change', function() {
         initDataset();
-        forceReset = true; 
+        // Resetting the camera specifically for a new dataset so the view is optimal
+        let plotDiv = document.getElementById('plot');
+        if (plotDiv.layout && plotDiv.layout.scene) {
+            plotDiv.layout.scene.camera = { eye: {x: 1.5, y: 1.5, z: 1.5} };
+        }
         updatePlot();
     });
 
     document.querySelectorAll('input').forEach(el => el.addEventListener('input', updatePlot));
     
+    // Initial draw
     updatePlot();
 
-    let relayoutTimer;
-    document.getElementById('plot').on('plotly_relayout', function(eventData) {
-        if (isProgrammaticUpdate) return;
-        if (eventData.dragmode && Object.keys(eventData).length === 1) return;
-        clearTimeout(relayoutTimer);
-        relayoutTimer = setTimeout(() => { updatePlot(); }, 400);
-    });
 </script>
 </body>
 </html>
