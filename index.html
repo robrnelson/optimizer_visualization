@@ -146,26 +146,36 @@
     let true_a = 2.0;
     let true_b = 1.5;
     
-    // Statistical properties for Reduced Chi-Squared (χ²_v) calculation
     let noise_sigma = 0.1;
     let degrees_of_freedom = 1;
 
     function initDataset() {
         currentDataset = document.getElementById('dataset').value;
+        const num_points = 100; // Increased sample size to 100
+        let seed = 42; 
+        
+        // Deterministic Box-Muller transform for true Gaussian noise
+        function getNoise(sigma) {
+            let u1 = 0, u2 = 0;
+            while(u1 === 0) {
+                let x1 = Math.sin(seed++) * 10000; u1 = x1 - Math.floor(x1);
+            }
+            let x2 = Math.sin(seed++) * 10000; u2 = x2 - Math.floor(x2);
+            return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2) * sigma;
+        }
+
         if (currentDataset === 'exp') {
             true_a = 2.0; true_b = 1.5;
-            x_data = Array.from({length: 10}, (_, i) => i / 9.0);
-            const noise = [0.0496714, -0.0138264, 0.0647688, 0.1523029, -0.0234153, -0.0234136, 0.1579212, 0.0767434, -0.0469474, 0.054256];
-            y_data = x_data.map((x, i) => true_a * Math.exp(true_b * x) + noise[i]);
-            noise_sigma = 0.10; // Theoretical sigma of the normal distribution
-            degrees_of_freedom = x_data.length - 2; // N - 2 parameters
+            noise_sigma = 0.10;
+            x_data = Array.from({length: num_points}, (_, i) => i / (num_points - 1));
+            y_data = x_data.map(x => true_a * Math.exp(true_b * x) + getNoise(noise_sigma));
+            degrees_of_freedom = num_points - 2;
         } else {
             true_a = 3.0; true_b = 1.0;
-            x_data = Array.from({length: 20}, (_, i) => i / 19.0 * 4.0);
-            const noise = [0.02, -0.05, 0.03, -0.01, 0.04, -0.02, 0.01, -0.03, 0.05, -0.04, 0.02, -0.05, 0.03, -0.01, 0.04, -0.02, 0.01, -0.03, 0.05, -0.04];
-            y_data = x_data.map((x, i) => Math.sin(true_a * x + true_b) + noise[i]);
-            noise_sigma = 0.033; // Approx standard deviation of the custom sine noise
-            degrees_of_freedom = x_data.length - 2;
+            noise_sigma = 0.15; 
+            x_data = Array.from({length: num_points}, (_, i) => (i / (num_points - 1)) * 4.0);
+            y_data = x_data.map(x => Math.sin(true_a * x + true_b) + getNoise(noise_sigma));
+            degrees_of_freedom = num_points - 2;
         }
     }
     initDataset();
@@ -180,8 +190,6 @@
     
     function getCost(p) { return 0.5 * getResiduals(p).reduce((sum, r) => sum + r*r, 0); }
     
-    // Calculates Reduced Chi-Squared: (Sum of Squared Residuals) / (DOF * Variance)
-    // Since Cost = 0.5 * SSR, SSR = 2 * Cost.
     function getReducedChiSq(cost) {
         return (2.0 * cost) / (degrees_of_freedom * noise_sigma * noise_sigma);
     }
@@ -325,7 +333,7 @@
             path_lm.push(p_lm);
         }
 
-        // 5. UPDATE METRICS UI (Including Chi-Squared)
+        // 5. UPDATE METRICS UI
         let cost_init = getCost([sx, sy]);
         let cost_gd = getCost(p_gd);
         let cost_nw = getCost(p_nw);
