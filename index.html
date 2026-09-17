@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cost Function Solver Visualization (3D)</title>
+    <title>Cost Function Solver Visualization</title>
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -44,6 +44,16 @@
     <div class="layout">
         <!-- LEFT SIDEBAR -->
         <div class="sidebar">
+            <div class="control-group">
+                <label>View Mode:</label>
+                <select id="viewmode" style="font-size: 14px; border-radius: 4px; padding: 6px; background-color: #e9ecef;">
+                    <option value="2d">2D Contour Plot</option>
+                    <option value="3d" selected>3D Surface Plot</option>
+                </select>
+            </div>
+
+            <hr>
+
             <div class="control-group">
                 <label>Dataset / Objective Function:</label>
                 <select id="dataset" style="font-size: 14px; border-radius: 4px; padding: 6px;">
@@ -253,19 +263,48 @@
         return H;
     }
 
-    // --- GENERATE STATIC 3D SURFACE BACKGROUND ---
-    const grid_size = 60;
-    const a_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
-    const b_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
 
     // --- MAIN UPDATE FUNCTION ---
     let isUpdating = false; 
+    let isProgrammaticUpdate = false; 
+    let forceReset = false;
 
     function updatePlot() {
         if (isUpdating) return;
         isUpdating = true;
 
-        const Z_surface = [];
+        let plotDiv = document.getElementById('plot');
+        let currentView = document.getElementById('viewmode').value;
+        
+        let currentXRange = [-5, 5];
+        let currentYRange = [-5, 5];
+        let currentDragMode = 'zoom';
+        let currentCamera = { eye: {x: 1.5, y: 1.5, z: 1.5} };
+        
+        // Read layout state before overwriting
+        if (plotDiv.layout && !forceReset) {
+            if (currentView === '2d' && plotDiv.layout.xaxis && plotDiv.layout.xaxis.range) {
+                currentXRange = plotDiv.layout.xaxis.range;
+                currentYRange = plotDiv.layout.yaxis.range;
+                if (plotDiv.layout.dragmode) currentDragMode = plotDiv.layout.dragmode;
+            } else if (currentView === '3d' && plotDiv.layout.scene && plotDiv.layout.scene.camera) {
+                currentCamera = plotDiv.layout.scene.camera;
+            }
+        }
+        forceReset = false;
+
+        const grid_size = currentView === '3d' ? 60 : 80;
+        
+        let a_range, b_range;
+        if (currentView === '3d') {
+            a_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
+            b_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
+        } else {
+            a_range = Array.from({length: grid_size}, (_, i) => currentXRange[0] + ((currentXRange[1] - currentXRange[0]) * i / (grid_size - 1)));
+            b_range = Array.from({length: grid_size}, (_, i) => currentYRange[0] + ((currentYRange[1] - currentYRange[0]) * i / (grid_size - 1)));
+        }
+
+        const Z = [];
         for(let b of b_range) {
             let row = [];
             for(let a of a_range) {
@@ -273,7 +312,7 @@
                 if(!isFinite(cost)) cost = 1e10; 
                 row.push(Math.log10(cost + 1e-6));
             }
-            Z_surface.push(row);
+            Z.push(row);
         }
 
         let sx = parseFloat(document.getElementById('startx').value);
@@ -430,59 +469,112 @@
         document.getElementById('iter-lm').innerText = done_lm ? `Iters: ${conv_lm}` : `Iters: ${iters}+`;
         document.getElementById('iter-nm').innerText = done_nm ? `Iters: ${conv_nm}` : `Iters: ${iters}+`;
 
-        // 6. BUILD 3D TRACES
+        // 6. BUILD TRACES & LAYOUT
         let traces = [];
-        
-        // 3D Surface Background
-        traces.push({
-            z: Z_surface, x: a_range, y: b_range, type: 'surface',
-            colorscale: 'Viridis', opacity: 0.8, showscale: false, hoverinfo: 'skip'
-        });
+        let layout = {
+            height: 650, margin: {l: 40, r: 20, t: 20, b: 40},
+            legend: {orientation: 'h', y: -0.15}, plot_bgcolor: 'white',
+            uirevision: currentDataset + currentView // preserves zooming/panning/camera!
+        };
 
-        function make3DPath(path, name, color) {
-            return {
-                type: 'scatter3d', mode: 'lines+markers', name: name,
-                x: path.map(p => p[0]), y: path.map(p => p[1]), z: path.map(p => Math.log10(getCost(p) + 1e-6) + 0.1),
-                line: {color: color, width: 4}, marker: {color: color, size: 4}
-            };
-        }
+        if (currentView === '3d') {
+            traces.push({
+                z: Z, x: a_range, y: b_range, type: 'surface',
+                colorscale: 'Viridis', opacity: 0.8, showscale: false, hoverinfo: 'skip'
+            });
 
-        if(document.getElementById('show-gd').checked) traces.push(make3DPath(path_gd, 'Gradient Descent', '#FF00FF'));
-        if(document.getElementById('show-nw').checked) traces.push(make3DPath(path_nw, 'Newton', '#FFA500'));
-        if(document.getElementById('show-gn').checked) traces.push(make3DPath(path_gn, 'Gauss-Newton', '#FF0000'));
-        if(document.getElementById('show-lm').checked) traces.push(make3DPath(path_lm, 'Levenberg-Marquardt', '#0099FF'));
-        if(document.getElementById('show-nm').checked) traces.push(make3DPath(path_nm, 'Nelder-Mead', '#32CD32'));
-        
-        traces.push({
-            type: 'scatter3d', mode: 'markers', name: 'True Minimum', showlegend: true, hoverinfo: 'skip',
-            x: [true_a], y: [true_b], z: [Math.log10(getCost([true_a, true_b]) + 1e-6) + 0.1],
-            marker: {color: 'red', size: 6, symbol: 'cross'}
-        });
+            function make3DPath(path, name, color) {
+                return {
+                    type: 'scatter3d', mode: 'lines+markers', name: name,
+                    x: path.map(p => p[0]), y: path.map(p => p[1]), z: path.map(p => Math.log10(getCost(p) + 1e-6) + 0.1),
+                    line: {color: color, width: 4}, marker: {color: color, size: 4}
+                };
+            }
 
-        traces.push({
-            type: 'scatter3d', mode: 'markers', name: 'Starting Point', showlegend: true,
-            x: [sx], y: [sy], z: [Math.log10(getCost([sx, sy]) + 1e-6) + 0.1],
-            marker: {color: 'black', size: 6, symbol: 'circle'}
-        });
+            if(document.getElementById('show-gd').checked) traces.push(make3DPath(path_gd, 'Gradient Descent', '#FF00FF'));
+            if(document.getElementById('show-nw').checked) traces.push(make3DPath(path_nw, 'Newton', '#FFA500'));
+            if(document.getElementById('show-gn').checked) traces.push(make3DPath(path_gn, 'Gauss-Newton', '#FF0000'));
+            if(document.getElementById('show-lm').checked) traces.push(make3DPath(path_lm, 'Levenberg-Marquardt', '#0099FF'));
+            if(document.getElementById('show-nm').checked) traces.push(make3DPath(path_nm, 'Nelder-Mead', '#32CD32'));
+            
+            traces.push({
+                type: 'scatter3d', mode: 'markers', name: 'True Minimum', showlegend: true, hoverinfo: 'skip',
+                x: [true_a], y: [true_b], z: [Math.log10(getCost([true_a, true_b]) + 1e-6) + 0.1],
+                marker: {color: 'red', size: 6, symbol: 'cross'}
+            });
+            traces.push({
+                type: 'scatter3d', mode: 'markers', name: 'Starting Point', showlegend: true,
+                x: [sx], y: [sy], z: [Math.log10(getCost([sx, sy]) + 1e-6) + 0.1],
+                marker: {color: 'black', size: 6, symbol: 'circle'}
+            });
 
-        // 7. RENDER 3D PLOT
-        Plotly.react('plot', traces, {
-            uirevision: currentDataset, // Freezes camera panning/zoom across all standard UI updates!
-            height: 650, margin: {l: 0, r: 0, t: 0, b: 0},
-            scene: {
+            layout.margin = {l: 0, r: 0, t: 0, b: 0};
+            layout.legend.y = -0.1;
+            layout.scene = {
                 xaxis: {title: 'X Position (a)', range: [-5, 5]},
                 yaxis: {title: 'Y Position (b)', range: [-5, 5]},
-                zaxis: {title: 'Log10(Cost)', range: [-1.5, 6]} // Capped Z-axis to stop jumping
-            },
-            legend: {orientation: 'h', y: -0.1},
-            plot_bgcolor: 'white'
-        }, {responsive: true}).then(() => {
+                zaxis: {title: 'Log10(Cost)', range: [-1.5, 6]},
+                camera: currentCamera
+            };
+
+        } else {
+            // 2D View
+            traces.push({
+                z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'fill'},
+                colorscale: 'Viridis', opacity: 0.75, showscale: false, ncontours: 60, hoverinfo: 'skip'
+            });
+
+            function make2DPath(path, name, color, dash='solid') {
+                return {
+                    type: 'scatter', mode: 'lines+markers', name: name,
+                    x: path.map(p => p[0]), y: path.map(p => p[1]),
+                    line: {color: color, dash: dash, width: 2}, marker: {color: color, size: 6}
+                };
+            }
+
+            if(document.getElementById('show-gd').checked) traces.push(make2DPath(path_gd, 'Gradient Descent', '#FF00FF', 'dot'));
+            if(document.getElementById('show-nw').checked) traces.push(make2DPath(path_nw, 'Newton', '#FFA500'));
+            if(document.getElementById('show-gn').checked) traces.push(make2DPath(path_gn, 'Gauss-Newton', '#FF0000', 'dash'));
+            if(document.getElementById('show-lm').checked) traces.push(make2DPath(path_lm, 'Levenberg-Marquardt', '#0099FF'));
+            if(document.getElementById('show-nm').checked) traces.push(make2DPath(path_nm, 'Nelder-Mead', '#32CD32', 'dashdot'));
+            
+            traces.push({
+                x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', showlegend: true, hoverinfo: 'skip', 
+                marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}
+            });
+            traces.push({
+                x: [sx], y: [sy], mode: 'markers', name: 'Starting Point', showlegend: true,
+                marker: {color: 'black', size: 10, line: {color: 'white', width: 1}}
+            });
+
+            layout.xaxis = {title: 'X Position →', range: currentXRange};
+            layout.yaxis = {title: 'Y Position ↑', range: currentYRange};
+            layout.dragmode = currentDragMode;
+        }
+
+        // 7. RENDER PLOT 
+        isProgrammaticUpdate = true; 
+        Plotly.react('plot', traces, layout, {responsive: true}).then(() => {
             isUpdating = false;
+            setTimeout(() => { isProgrammaticUpdate = false; }, 50);
         });
     }
 
+    // View mode switch handler
+    document.getElementById('viewmode').addEventListener('change', function() {
+        Plotly.purge('plot'); // Clear plot memory completely to ensure smooth 2D -> 3D transition
+        forceReset = true;
+        updatePlot();
+    });
+
+    // Dataset switch handler
     document.getElementById('dataset').addEventListener('change', function() {
         initDataset();
+        forceReset = true; 
+        let plotDiv = document.getElementById('plot');
+        if (plotDiv.layout && plotDiv.layout.scene) {
+            plotDiv.layout.scene.camera = { eye: {x: 1.5, y: 1.5, z: 1.5} };
+        }
         updatePlot();
     });
 
@@ -491,6 +583,16 @@
     // Initial draw
     updatePlot();
 
+    // Debounced listener specifically to handle smooth dynamic contour redrawing in 2D mode
+    let relayoutTimer;
+    document.getElementById('plot').on('plotly_relayout', function(eventData) {
+        if (isProgrammaticUpdate) return;
+        if (document.getElementById('viewmode').value === '3d') return; // Skip 3D camera pan
+        if (eventData.dragmode && Object.keys(eventData).length === 1) return;
+        
+        clearTimeout(relayoutTimer);
+        relayoutTimer = setTimeout(() => { updatePlot(); }, 400);
+    });
 </script>
 </body>
 </html>
