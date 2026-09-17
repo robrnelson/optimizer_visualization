@@ -59,7 +59,7 @@
         </div>
         <div class="control-group">
             <label>Initial LM Lambda: <span id="val-initlambda">1.0</span></label>
-            <input type="range" id="initlambda" min="0.001" max="10" step="0.01" value="1.0">
+            <input type="range" id="initlambda" min="0.001" max="100" step="0.1" value="1.0">
             
             <label>GD Learning Rate: <span id="val-lr">0.050</span></label>
             <input type="range" id="lr" min="0.001" max="0.2" step="0.001" value="0.05">
@@ -70,7 +70,7 @@
         <label class="toggle-label"><input type="checkbox" id="show-nw" checked> Newton</label>
         <label class="toggle-label"><input type="checkbox" id="show-gn" checked> Gauss-Newton</label>
         <label class="toggle-label"><input type="checkbox" id="show-lm" checked> Levenberg-Marquardt</label>
-        <label class="toggle-label"><input type="checkbox" id="show-gd"> Gradient Descent</label>
+        <label class="toggle-label"><input type="checkbox" id="show-gd" checked> Gradient Descent</label>
     </div>
 
 <script>
