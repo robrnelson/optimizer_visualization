@@ -114,7 +114,8 @@
     }
 
     // --- MAIN UPDATE FUNCTION ---
-    let isUpdating = false; // Flag to prevent infinite drawing loops
+    let isUpdating = false; 
+    let isProgrammaticUpdate = false; // Flag to prevent infinite relayout loops
 
     function updatePlot() {
         if (isUpdating) return;
@@ -217,7 +218,6 @@
         // 5. BUILD TRACES
         let traces = [];
         
-        // Insert the dynamic contour map
         traces.push({
             z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'lines'},
             line: {width: 1}, colorscale: 'Greys', opacity: 0.3, showscale: false, ncontours: 60, hoverinfo: 'skip'
@@ -228,10 +228,10 @@
         if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#32A852', dash: 'dash', width: 2}});
         if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#4B93FF', width: 2}});
         
-        // True Min
-        traces.push({x: [true_a], y: [true_b], mode: 'markers', showlegend: false, hoverinfo: 'skip', marker: {color: 'white', size: 12, line: {color: '#32A852', width: 2}}});
+        traces.push({x: [true_a], y: [true_b], mode: 'markers', showlegend: false, hoverinfo: 'skip', marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}});
 
-        // 6. RENDER PLOT (Using the preserved zoom ranges)
+        // 6. RENDER PLOT
+        isProgrammaticUpdate = true; // Tell the relayout listener to ignore this specific redraw
         Plotly.react('plot', traces, {
             height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
             xaxis: {title: 'X Position →', range: currentXRange},
@@ -239,8 +239,9 @@
             legend: {orientation: 'h', y: -0.15},
             plot_bgcolor: 'white'
         }, {responsive: true}).then(() => {
-            // Once drawing is finished, release the lock
             isUpdating = false;
+            // Clear the flag shortly after drawing finishes
+            setTimeout(() => { isProgrammaticUpdate = false; }, 50);
         });
     }
 
@@ -250,9 +251,19 @@
     // Initial draw
     updatePlot();
 
-    // NEW: Attach listener to update the contour grid when you zoom or pan
+    // DEBOUNCED RELAYOUT LISTENER
+    let relayoutTimer;
     document.getElementById('plot').on('plotly_relayout', function(eventData) {
-        updatePlot();
+        // If the script is drawing the plot, ignore the event.
+        if (isProgrammaticUpdate) return;
+        
+        // Clear any existing timer so we don't draw while the user is actively dragging
+        clearTimeout(relayoutTimer);
+        
+        // Wait 400ms after the user stops moving the mouse to recalculate the contours
+        relayoutTimer = setTimeout(() => {
+            updatePlot();
+        }, 400);
     });
 </script>
 
