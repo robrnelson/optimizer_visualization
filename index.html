@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LM Algorithm Optimizer</title>
+    <!-- Load Plotly via CDN -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #333; }
+        h1 { border-bottom: 1px solid #eaeaea; padding-bottom: 10px; }
+        .metrics-container { display: flex; justify-content: space-around; padding: 15px; margin-top: -20px; font-weight: bold; font-size: 1.1em; }
+        .metric-label { font-size: 0.8em; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+        .metric-value { font-size: 1.4em; }
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .control-group { display: flex; flex-direction: column; }
+        label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
+        input[type="range"] { width: 100%; margin-bottom: 10px; }
+        .toggles { display: flex; justify-content: space-between; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+        .toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 0.9em; }
+        .toggle-label input { margin-right: 8px; }
+    </style>
+</head>
+<body>
+
+    <h1>LM Algorithm Optimizer</h1>
+    
+    <div id="plot"></div>
+    
+    <div class="metrics-container">
+        <div style="text-align: center;">
+            <div class="metric-label">Current LM Lambda</div>
+            <div class="metric-value" id="val-lambda">1.00e+0</div>
+        </div>
+        <div style="text-align: center;">
+            <div class="metric-label">Current LM Cost</div>
+            <div class="metric-value" id="val-cost">0.00</div>
+        </div>
+    </div>
+
+    <div class="controls-grid">
+        <div class="control-group">
+            <label>Start X: <span id="val-startx">-2.0</span></label>
+            <input type="range" id="startx" min="-5" max="5" step="0.1" value="-2.0">
+            
+            <label>Start Y: <span id="val-starty">-2.4</span></label>
+            <input type="range" id="starty" min="-5" max="5" step="0.1" value="-2.4">
+            
+            <label>Iteration Step: <span id="val-iter">20</span></label>
+            <input type="range" id="iter" min="0" max="20" step="1" value="20">
+        </div>
+        <div class="control-group">
+            <label>Initial LM Lambda: <span id="val-initlambda">1.0</span></label>
+            <input type="range" id="initlambda" min="0.001" max="10" step="0.01" value="1.0">
+            
+            <label>GD Learning Rate: <span id="val-lr">0.050</span></label>
+            <input type="range" id="lr" min="0.001" max="0.2" step="0.001" value="0.05">
+        </div>
+    </div>
+
+    <div class="toggles">
+        <label class="toggle-label"><input type="checkbox" id="show-nw" checked> Newton</label>
+        <label class="toggle-label"><input type="checkbox" id="show-gn" checked> Gauss-Newton</label>
+        <label class="toggle-label"><input type="checkbox" id="show-lm" checked> Levenberg-Marquardt</label>
+        <label class="toggle-label"><input type="checkbox" id="show-gd"> Gradient Descent</label>
+    </div>
+
+<script>
+    // --- MATH HELPERS FOR 2x2 MATRICES ---
+    function invert2x2(A) {
+        let det = A[0][0]*A[1][1] - A[0][1]*A[1][0];
+        if (Math.abs(det) < 1e-9) throw new Error("Singular Matrix");
+        return [ [A[1][1]/det, -A[0][1]/det], [-A[1][0]/det, A[0][0]/det] ];
+    }
+    function mul2x2Vec(A, v) { return [A[0][0]*v[0] + A[0][1]*v[1], A[1][0]*v[0] + A[1][1]*v[1]]; }
+    function JTJ(J) {
+        let res = [[0,0],[0,0]];
+        for(let i=0; i<J.length; i++) {
+            res[0][0] += J[i][0]*J[i][0]; res[0][1] += J[i][0]*J[i][1];
+            res[1][0] += J[i][1]*J[i][0]; res[1][1] += J[i][1]*J[i][1];
+        }
+        return res;
+    }
+    function JT_res(J, r) {
+        let out = [0,0];
+        for(let i=0; i<J.length; i++) { out[0] += J[i][0]*r[i]; out[1] += J[i][1]*r[i]; }
+        return out;
+    }
+
+    // --- DATA & DOMAIN ---
+    const x_data = Array.from({length: 10}, (_, i) => i / 9.0);
+    const true_a = 2.0, true_b = 1.5;
+    // Generate y_data with deterministic pseudo-random noise to match Python seed 42
+    const noise = [0.0496714, -0.0138264, 0.0647688, 0.1523029, -0.0234153, -0.0234136, 0.1579212, 0.0767434, -0.0469474, 0.054256];
+    const y_data = x_data.map((x, i) => true_a * Math.exp(true_b * x) + noise[i]);
+
+    function getResiduals(p) { return x_data.map((x, i) => p[0] * Math.exp(p[1] * x) - y_data[i]); }
+    function getCost(p) { return 0.5 * getResiduals(p).reduce((sum, r) => sum + r*r, 0); }
+    function getJacobian(p) {
+        return x_data.map(x => [Math.exp(p[1]*x), p[0]*x*Math.exp(p[1]*x)]);
+    }
+    function getExactHessian(p) {
+        let res = getResiduals(p);
+        let J = getJacobian(p);
+        let H = JTJ(J);
+        for(let i=0; i<x_data.length; i++) {
+            let x = x_data[i];
+            let d2_ab = x * Math.exp(p[1]*x);
+            let d2_bb = p[0] * x * x * Math.exp(p[1]*x);
+            H[0][1] += res[i] * d2_ab;
+            H[1][0] += res[i] * d2_ab;
+            H[1][1] += res[i] * d2_bb;
+        }
+        return H;
+    }
+
+    // --- CALCULATE CONTOUR BACKGROUND ---
+    const grid_size = 60;
+    const a_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
+    const b_range = Array.from({length: grid_size}, (_, i) => -5 + (10 * i / (grid_size - 1)));
+    const Z = [];
+    for(let b of b_range) {
+        let row = [];
+        for(let a of a_range) {
+            row.push(Math.log10(getCost([a, b]) + 1e-6));
+        }
+        Z.push(row);
+    }
+
+    // --- MAIN UPDATE FUNCTION ---
+    function updatePlot() {
+        let sx = parseFloat(document.getElementById('startx').value);
+        let sy = parseFloat(document.getElementById('starty').value);
+        let iters = parseInt(document.getElementById('iter').value);
+        let init_lambda = parseFloat(document.getElementById('initlambda').value);
+        let lr = parseFloat(document.getElementById('lr').value);
+
+        // Update Labels
+        document.getElementById('val-startx').innerText = sx.toFixed(1);
+        document.getElementById('val-starty').innerText = sy.toFixed(1);
+        document.getElementById('val-iter').innerText = iters;
+        document.getElementById('val-initlambda').innerText = init_lambda.toFixed(2);
+        document.getElementById('val-lr').innerText = lr.toFixed(3);
+
+        let p_gd = [sx, sy], p_gn = [sx, sy], p_nw = [sx, sy], p_lm = [sx, sy];
+        let path_gd = [p_gd], path_gn = [p_gn], path_nw = [p_nw], path_lm = [p_lm];
+        let cur_lambda = init_lambda;
+
+        for(let i=0; i<iters; i++) {
+            // GD
+            let J_gd = getJacobian(p_gd), r_gd = getResiduals(p_gd);
+            let grad_gd = JT_res(J_gd, r_gd);
+            p_gd = [p_gd[0] - lr*grad_gd[0], p_gd[1] - lr*grad_gd[1]];
+            path_gd.push(p_gd);
+
+            // GN
+            try {
+                let J_gn = getJacobian(p_gn), r_gn = getResiduals(p_gn);
+                let step_gn = mul2x2Vec(invert2x2(JTJ(J_gn)), JT_res(J_gn, r_gn));
+                p_gn = [p_gn[0] - step_gn[0], p_gn[1] - step_gn[1]];
+            } catch(e) {}
+            path_gn.push(p_gn);
+
+            // Newton
+            try {
+                let J_nw = getJacobian(p_nw), r_nw = getResiduals(p_nw);
+                let step_nw = mul2x2Vec(invert2x2(getExactHessian(p_nw)), JT_res(J_nw, r_nw));
+                p_nw = [p_nw[0] - step_nw[0], p_nw[1] - step_nw[1]];
+            } catch(e) {}
+            path_nw.push(p_nw);
+
+            // LM
+            let J_lm = getJacobian(p_lm), r_lm = getResiduals(p_lm);
+            let cost_lm = getCost(p_lm);
+            let H_lm = JTJ(J_lm);
+            H_lm[0][0] += cur_lambda * H_lm[0][0];
+            H_lm[1][1] += cur_lambda * H_lm[1][1];
+            
+            try {
+                let step_lm = mul2x2Vec(invert2x2(H_lm), JT_res(J_lm, r_lm));
+                let p_try = [p_lm[0] - step_lm[0], p_lm[1] - step_lm[1]];
+                if(getCost(p_try) < cost_lm) {
+                    p_lm = p_try;
+                    cur_lambda /= 10.0;
+                } else {
+                    cur_lambda *= 10.0;
+                }
+            } catch(e) { cur_lambda *= 10.0; }
+            path_lm.push(p_lm);
+        }
+
+        document.getElementById('val-lambda').innerText = cur_lambda.toExponential(2);
+        document.getElementById('val-cost').innerText = getCost(p_lm).toFixed(2);
+
+        // Build traces
+        let traces = [];
+        traces.push({
+            z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'lines'},
+            line: {width: 1}, colorscale: 'Greys', opacity: 0.3, showscale: false, ncontours: 45, hoverinfo: 'skip'
+        });
+
+        if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#E324B3', dash: 'dot', width: 2}});
+        if(document.getElementById('show-nw').checked) traces.push({x: path_nw.map(p=>p[0]), y: path_nw.map(p=>p[1]), mode: 'lines+markers', name: 'Newton', line: {color: '#F2A93B', width: 2}});
+        if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#32A852', dash: 'dash', width: 2}});
+        if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#4B93FF', width: 2}});
+        
+        // True Min
+        traces.push({x: [true_a], y: [true_b], mode: 'markers', showlegend: false, hoverinfo: 'skip', marker: {color: 'white', size: 12, line: {color: '#32A852', width: 2}}});
+
+        Plotly.react('plot', traces, {
+            height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
+            xaxis: {title: 'X Position →', range: [-5, 5]},
+            yaxis: {title: 'Y Position ↑', range: [-5, 5]},
+            legend: {orientation: 'h', y: -0.15},
+            plot_bgcolor: 'white'
+        }, {responsive: true});
+    }
+
+    // Attach listeners to update in real-time
+    document.querySelectorAll('input').forEach(el => el.addEventListener('input', updatePlot));
+    
+    // Initial draw
+    updatePlot();
+</script>
+
+</body>
+</html>
