@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cost Function Solver Visualization<</title>
+    <title>Cost Function Solver Visualization</title>
     <!-- Load Plotly via CDN -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -15,7 +15,7 @@
         .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; }
         .control-group { display: flex; flex-direction: column; }
         label { margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
-        input[type="range"] { width: 100%; margin-bottom: 10px; }
+        input[type="range"], select { width: 100%; margin-bottom: 10px; padding: 5px; font-family: inherit; }
         .toggles { display: flex; justify-content: space-between; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; }
         .toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 0.9em; }
         .toggle-label input { margin-right: 8px; }
@@ -23,7 +23,7 @@
 </head>
 <body>
 
-    <h1>Cost Function Solver Visualization<</h1>
+    <h1>Cost Function Solver Visualization</h1>
     
     <div id="plot"></div>
     
@@ -39,6 +39,14 @@
     </div>
 
     <div class="controls-grid">
+        <div class="control-group" style="grid-column: 1 / span 2;">
+            <label>Dataset / Objective Function:</label>
+            <select id="dataset" style="font-size: 15px; border-radius: 4px; padding: 8px;">
+                <option value="exp">Exponential Fit: y = a * exp(b * x) (Single Global Minimum)</option>
+                <option value="sine">Sine Wave Fit: y = sin(a * x + b) (Multiple Local Minima)</option>
+            </select>
+        </div>
+
         <div class="control-group">
             <label>Start X: <span id="val-startx">3.0</span></label>
             <input type="range" id="startx" min="-5" max="5" step="0.1" value="3.0">
@@ -87,28 +95,69 @@
         return out;
     }
 
-    // --- DATA & DOMAIN ---
-    const x_data = Array.from({length: 10}, (_, i) => i / 9.0);
-    const true_a = 2.0, true_b = 1.5;
-    const noise = [0.0496714, -0.0138264, 0.0647688, 0.1523029, -0.0234153, -0.0234136, 0.1579212, 0.0767434, -0.0469474, 0.054256];
-    const y_data = x_data.map((x, i) => true_a * Math.exp(true_b * x) + noise[i]);
+    // --- DATA & DOMAIN STATE ---
+    let currentDataset = 'exp';
+    let x_data = [];
+    let y_data = [];
+    let true_a = 2.0;
+    let true_b = 1.5;
 
-    function getResiduals(p) { return x_data.map((x, i) => p[0] * Math.exp(p[1] * x) - y_data[i]); }
-    function getCost(p) { return 0.5 * getResiduals(p).reduce((sum, r) => sum + r*r, 0); }
-    function getJacobian(p) {
-        return x_data.map(x => [Math.exp(p[1]*x), p[0]*x*Math.exp(p[1]*x)]);
+    function initDataset() {
+        currentDataset = document.getElementById('dataset').value;
+        if (currentDataset === 'exp') {
+            true_a = 2.0; true_b = 1.5;
+            x_data = Array.from({length: 10}, (_, i) => i / 9.0);
+            const noise = [0.0496714, -0.0138264, 0.0647688, 0.1523029, -0.0234153, -0.0234136, 0.1579212, 0.0767434, -0.0469474, 0.054256];
+            y_data = x_data.map((x, i) => true_a * Math.exp(true_b * x) + noise[i]);
+        } else {
+            // Sine wave dataset (Generates repeating local minima)
+            true_a = 3.0; true_b = 1.0;
+            x_data = Array.from({length: 20}, (_, i) => i / 19.0 * 4.0);
+            const noise = [0.02, -0.05, 0.03, -0.01, 0.04, -0.02, 0.01, -0.03, 0.05, -0.04, 0.02, -0.05, 0.03, -0.01, 0.04, -0.02, 0.01, -0.03, 0.05, -0.04];
+            y_data = x_data.map((x, i) => Math.sin(true_a * x + true_b) + noise[i]);
+        }
     }
+    initDataset();
+
+    function getResiduals(p) { 
+        if (currentDataset === 'exp') {
+            return x_data.map((x, i) => p[0] * Math.exp(p[1] * x) - y_data[i]);
+        } else {
+            return x_data.map((x, i) => Math.sin(p[0] * x + p[1]) - y_data[i]);
+        }
+    }
+    function getCost(p) { return 0.5 * getResiduals(p).reduce((sum, r) => sum + r*r, 0); }
+    
+    function getJacobian(p) {
+        if (currentDataset === 'exp') {
+            return x_data.map(x => [Math.exp(p[1]*x), p[0]*x*Math.exp(p[1]*x)]);
+        } else {
+            return x_data.map(x => [x * Math.cos(p[0]*x + p[1]), Math.cos(p[0]*x + p[1])]);
+        }
+    }
+
     function getExactHessian(p) {
         let res = getResiduals(p);
         let J = getJacobian(p);
         let H = JTJ(J);
         for(let i=0; i<x_data.length; i++) {
             let x = x_data[i];
-            let d2_ab = x * Math.exp(p[1]*x);
-            let d2_bb = p[0] * x * x * Math.exp(p[1]*x);
-            H[0][1] += res[i] * d2_ab;
-            H[1][0] += res[i] * d2_ab;
-            H[1][1] += res[i] * d2_bb;
+            if (currentDataset === 'exp') {
+                let d2_ab = x * Math.exp(p[1]*x);
+                let d2_bb = p[0] * x * x * Math.exp(p[1]*x);
+                H[0][1] += res[i] * d2_ab;
+                H[1][0] += res[i] * d2_ab;
+                H[1][1] += res[i] * d2_bb;
+            } else {
+                let sin_val = Math.sin(p[0]*x + p[1]);
+                let d2_aa = -x * x * sin_val;
+                let d2_ab = -x * sin_val;
+                let d2_bb = -sin_val;
+                H[0][0] += res[i] * d2_aa;
+                H[0][1] += res[i] * d2_ab;
+                H[1][0] += res[i] * d2_ab;
+                H[1][1] += res[i] * d2_bb;
+            }
         }
         return H;
     }
@@ -116,6 +165,7 @@
     // --- MAIN UPDATE FUNCTION ---
     let isUpdating = false; 
     let isProgrammaticUpdate = false; 
+    let forceReset = false;
 
     function updatePlot() {
         if (isUpdating) return;
@@ -128,7 +178,7 @@
         let currentYRange = [-5, 5];
         let currentDragMode = 'zoom';
         
-        if (plotDiv.layout) {
+        if (plotDiv.layout && !forceReset) {
             if (plotDiv.layout.xaxis && plotDiv.layout.xaxis.range) {
                 currentXRange = plotDiv.layout.xaxis.range;
                 currentYRange = plotDiv.layout.yaxis.range;
@@ -137,6 +187,7 @@
                 currentDragMode = plotDiv.layout.dragmode;
             }
         }
+        forceReset = false;
 
         // 2. GENERATE CONTOUR GRID TO FILL THE EXACT VIEWPORT
         const grid_size = 80;
@@ -152,7 +203,9 @@
         for(let b of b_range) {
             let row = [];
             for(let a of a_range) {
-                row.push(Math.log10(getCost([a, b]) + 1e-6));
+                let cost = getCost([a, b]);
+                if(!isFinite(cost)) cost = 1e10; // Prevent overflow breaks
+                row.push(Math.log10(cost + 1e-6));
             }
             Z.push(row);
         }
@@ -218,7 +271,6 @@
             path_lm.push(p_lm);
         }
 
-        // Update DOM Metrics (Using toExponential to handle very large starting costs cleanly)
         document.getElementById('val-initcost').innerText = getCost([sx, sy]).toExponential(2);
         document.getElementById('val-cost').innerText = getCost(p_lm).toExponential(2);
 
@@ -228,15 +280,15 @@
         // Updated contour to Viridis with higher opacity
         traces.push({
             z: Z, x: a_range, y: b_range, type: 'contour', contours: {coloring: 'fill'},
-            colorscale: 'Viridis', opacity: 0.7, showscale: false, ncontours: 60, hoverinfo: 'skip'
+            colorscale: 'Viridis', opacity: 0.75, showscale: false, ncontours: 60, hoverinfo: 'skip'
         });
 
-        if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#E324B3', dash: 'dot', width: 2}});
-        if(document.getElementById('show-nw').checked) traces.push({x: path_nw.map(p=>p[0]), y: path_nw.map(p=>p[1]), mode: 'lines+markers', name: 'Newton', line: {color: '#F2A93B', width: 2}});
-        if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#32A852', dash: 'dash', width: 2}});
-        if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#4B93FF', width: 2}});
+        if(document.getElementById('show-gd').checked) traces.push({x: path_gd.map(p=>p[0]), y: path_gd.map(p=>p[1]), mode: 'lines+markers', name: 'Gradient Descent', line: {color: '#FF00FF', dash: 'dot', width: 2}});
+        if(document.getElementById('show-nw').checked) traces.push({x: path_nw.map(p=>p[0]), y: path_nw.map(p=>p[1]), mode: 'lines+markers', name: 'Newton', line: {color: '#FFA500', width: 2}});
+        if(document.getElementById('show-gn').checked) traces.push({x: path_gn.map(p=>p[0]), y: path_gn.map(p=>p[1]), mode: 'lines+markers', name: 'Gauss-Newton', line: {color: '#FF0000', dash: 'dash', width: 2}});
+        if(document.getElementById('show-lm').checked) traces.push({x: path_lm.map(p=>p[0]), y: path_lm.map(p=>p[1]), mode: 'lines+markers', name: 'Levenberg-Marquardt', line: {color: '#00E5FF', width: 2}});
         
-        // True Min
+        // True Min (Show in legend, White with Red Edge)
         traces.push({
             x: [true_a], y: [true_b], mode: 'markers', name: 'True Minimum', 
             showlegend: true, hoverinfo: 'skip', 
@@ -264,6 +316,13 @@
             setTimeout(() => { isProgrammaticUpdate = false; }, 50);
         });
     }
+
+    // Handle dataset change
+    document.getElementById('dataset').addEventListener('change', function() {
+        initDataset();
+        forceReset = true; // Reset zoom to [-5, 5] to see the new landscape clearly
+        updatePlot();
+    });
 
     // Attach listeners to update when you move the sliders or toggles
     document.querySelectorAll('input').forEach(el => el.addEventListener('input', updatePlot));
