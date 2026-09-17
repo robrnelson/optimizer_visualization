@@ -115,7 +115,7 @@
 
     // --- MAIN UPDATE FUNCTION ---
     let isUpdating = false; 
-    let isProgrammaticUpdate = false; // Flag to prevent infinite relayout loops
+    let isProgrammaticUpdate = false; 
 
     function updatePlot() {
         if (isUpdating) return;
@@ -123,13 +123,19 @@
 
         let plotDiv = document.getElementById('plot');
         
-        // 1. DYNAMICALLY READ CURRENT ZOOM/PAN BOUNDS
+        // 1. DYNAMICALLY READ CURRENT ZOOM/PAN BOUNDS AND DRAG MODE
         let currentXRange = [-5, 5];
         let currentYRange = [-5, 5];
+        let currentDragMode = 'zoom'; // Default tool
         
-        if (plotDiv.layout && plotDiv.layout.xaxis && plotDiv.layout.xaxis.range) {
-            currentXRange = plotDiv.layout.xaxis.range;
-            currentYRange = plotDiv.layout.yaxis.range;
+        if (plotDiv.layout) {
+            if (plotDiv.layout.xaxis && plotDiv.layout.xaxis.range) {
+                currentXRange = plotDiv.layout.xaxis.range;
+                currentYRange = plotDiv.layout.yaxis.range;
+            }
+            if (plotDiv.layout.dragmode) {
+                currentDragMode = plotDiv.layout.dragmode;
+            }
         }
 
         // 2. GENERATE CONTOUR GRID TO FILL THE EXACT VIEWPORT
@@ -230,17 +236,17 @@
         
         traces.push({x: [true_a], y: [true_b], mode: 'markers', showlegend: false, hoverinfo: 'skip', marker: {color: 'white', size: 12, line: {color: 'red', width: 2}}});
 
-        // 6. RENDER PLOT
-        isProgrammaticUpdate = true; // Tell the relayout listener to ignore this specific redraw
+        // 6. RENDER PLOT (Preserving Drag Mode alongside zoom ranges)
+        isProgrammaticUpdate = true; 
         Plotly.react('plot', traces, {
             height: 550, margin: {l: 40, r: 20, t: 20, b: 40},
             xaxis: {title: 'X Position →', range: currentXRange},
             yaxis: {title: 'Y Position ↑', range: currentYRange},
             legend: {orientation: 'h', y: -0.15},
-            plot_bgcolor: 'white'
+            plot_bgcolor: 'white',
+            dragmode: currentDragMode
         }, {responsive: true}).then(() => {
             isUpdating = false;
-            // Clear the flag shortly after drawing finishes
             setTimeout(() => { isProgrammaticUpdate = false; }, 50);
         });
     }
@@ -254,13 +260,12 @@
     // DEBOUNCED RELAYOUT LISTENER
     let relayoutTimer;
     document.getElementById('plot').on('plotly_relayout', function(eventData) {
-        // If the script is drawing the plot, ignore the event.
         if (isProgrammaticUpdate) return;
         
-        // Clear any existing timer so we don't draw while the user is actively dragging
-        clearTimeout(relayoutTimer);
+        // Minor optimization: don't trigger heavy redraws just for toolbar clicks
+        if (eventData.dragmode && Object.keys(eventData).length === 1) return;
         
-        // Wait 400ms after the user stops moving the mouse to recalculate the contours
+        clearTimeout(relayoutTimer);
         relayoutTimer = setTimeout(() => {
             updatePlot();
         }, 400);
