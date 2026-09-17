@@ -332,7 +332,8 @@
         let path_gd = [p_gd], path_gn = [p_gn], path_nw = [p_nw], path_lm = [p_lm];
         
         // Nelder-Mead Initial Simplex
-        let nm_simplex = [ [sx, sy], [sx + 0.5, sy], [sx, sy + 0.5] ];
+        //let nm_simplex = [ [sx, sy], [sx + 0.5, sy], [sx, sy + 0.5] ];
+        let nm_simplex = [ [sx, sy], [sx + 0.1, sy], [sx, sy + 0.1] ];
         nm_simplex.sort((a, b) => getCost(a) - getCost(b));
         let p_nm = nm_simplex[0];
         let path_nm = [p_nm];
